@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Spring Boot
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+logs/
+
+# Environment & secrets
+.env
+*.env.*
+application-local.properties
+application-local.yml
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Office documents
+*.docx
+*.xlsx
+*.pptx
+
+# OS
+Thumbs.db
