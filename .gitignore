@@ -38,5 +38,9 @@ CLAUDE.md
 *.xlsx
 *.pptx
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # OS
 Thumbs.db
