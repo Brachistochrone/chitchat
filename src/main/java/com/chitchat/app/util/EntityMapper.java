@@ -1,16 +1,24 @@
 package com.chitchat.app.util;
 
+import com.chitchat.app.dto.response.AttachmentResponse;
 import com.chitchat.app.dto.response.AuthResponse;
 import com.chitchat.app.dto.response.BanResponse;
+import com.chitchat.app.entity.enums.MessageEventType;
+import com.chitchat.app.kafka.events.ChatMessageEvent;
 import com.chitchat.app.dto.response.MemberResponse;
+import com.chitchat.app.dto.response.MessageResponse;
 import com.chitchat.app.dto.response.RoomResponse;
 import com.chitchat.app.dto.response.SessionResponse;
 import com.chitchat.app.dto.response.UserResponse;
+import com.chitchat.app.entity.Attachment;
+import com.chitchat.app.entity.Message;
 import com.chitchat.app.entity.Room;
 import com.chitchat.app.entity.RoomBan;
 import com.chitchat.app.entity.RoomMember;
 import com.chitchat.app.entity.User;
 import com.chitchat.app.entity.UserSession;
+
+import java.util.List;
 
 public final class EntityMapper {
 
@@ -67,6 +75,49 @@ public final class EntityMapper {
                 .user(toUserResponse(ban.getUser()))
                 .bannedBy(toUserResponse(ban.getBannedBy()))
                 .bannedAt(ban.getBannedAt())
+                .build();
+    }
+
+    public static AttachmentResponse toAttachmentResponse(Attachment attachment) {
+        return AttachmentResponse.builder()
+                .id(attachment.getId())
+                .originalFilename(attachment.getOriginalFilename())
+                .fileSize(attachment.getFileSize())
+                .mimeType(attachment.getMimeType())
+                .comment(attachment.getComment())
+                .downloadUrl("/api/attachments/" + attachment.getId())
+                .build();
+    }
+
+    public static MessageResponse toMessageResponse(Message message, List<AttachmentResponse> attachments) {
+        MessageResponse replyTo = null;
+        if (message.getReplyTo() != null) {
+            replyTo = toMessageResponse(message.getReplyTo(), List.of());
+        }
+        return MessageResponse.builder()
+                .id(message.getId())
+                .chatType(message.getChatType())
+                .sender(toUserResponse(message.getSender()))
+                .content(message.getContent())
+                .replyTo(replyTo)
+                .attachments(attachments)
+                .editedAt(message.getEditedAt())
+                .createdAt(message.getCreatedAt())
+                .build();
+    }
+
+    public static ChatMessageEvent toChatMessageEvent(Message message, MessageEventType eventType) {
+        return ChatMessageEvent.builder()
+                .messageId(message.getId())
+                .chatType(message.getChatType())
+                .roomId(message.getRoom() != null ? message.getRoom().getId() : null)
+                .senderId(message.getSender().getId())
+                .recipientId(message.getRecipient() != null ? message.getRecipient().getId() : null)
+                .content(message.getContent())
+                .replyToId(message.getReplyTo() != null ? message.getReplyTo().getId() : null)
+                .attachmentIds(List.of())
+                .eventType(eventType)
+                .createdAt(message.getCreatedAt())
                 .build();
     }
 }
