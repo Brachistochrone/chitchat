@@ -1,232 +1,230 @@
-# TODO — Milestone 3: Real-time Messaging
+# TODO — Milestone 4: Presence & Notifications
 
 ---
 
-## 1. Kafka Event POJOs (`kafka/events/`)
+## 1. New Enums & Event POJOs
 
-- [x] `ChatMessageEvent`:
-  - `messageId` (`Long`), `chatType` (`ChatType`), `roomId` (`Long`, nullable), `senderId` (`Long`), `recipientId` (`Long`, nullable), `content` (`String`), `replyToId` (`Long`, nullable), `attachmentIds` (`List<Long>`), `eventType` (`String` — `"CREATED"`, `"EDITED"`, `"DELETED"`), `createdAt` (`OffsetDateTime`)
-- [x] `PresenceEvent`:
-  - `userId` (`Long`), `username` (`String`), `status` (`String` — `"ONLINE"` or `"OFFLINE"`), `timestamp` (`OffsetDateTime`)
+### New enum `entity/enums/PresenceAction.java`
+- [x] `CONNECT`, `DISCONNECT`, `HEARTBEAT`
 
----
+### Update `kafka/events/PresenceEvent.java`
+- [x] Add `action` field (`PresenceAction`) — distinguishes connect/disconnect/heartbeat for the Kafka Streams aggregate
 
-## 2. DTOs
+### New POJO `kafka/events/PresenceStateEvent.java`
+- [x] `userId` (`Long`), `username` (`String`), `status` (`PresenceStatus`), `tabCount` (`int`), `lastHeartbeatMs` (`long`)
+- [x] Output of the Kafka Streams KTable — published to `presence.state` topic
 
-### Request DTOs (`dto/request/`)
-- [x] `SendMessageRequest`:
-  - `content` (`@Size(max=3072)`)
-  - `replyToId` (`Long`, optional)
-  - `attachmentIds` (`List<Long>`, optional)
-- [x] `EditMessageRequest`:
-  - `content` (`@NotBlank @Size(max=3072)`)
+### New enum `entity/enums/NotificationType.java`
+- [x] `FRIEND_REQUEST`, `ROOM_INVITE`, `UNREAD_UPDATE`
 
-### Response DTOs (`dto/response/`)
-- [x] `AttachmentResponse`:
-  - `id`, `originalFilename`, `fileSize` (`Long`), `mimeType`, `comment`, `downloadUrl` (`String`)
-- [x] `MessageResponse`:
-  - `id`, `chatType` (`ChatType`), `sender` (`UserResponse`), `content`, `replyTo` (`MessageResponse`, nullable), `attachments` (`List<AttachmentResponse>`), `editedAt`, `createdAt`
+### New POJO `kafka/events/NotificationEvent.java`
+- [x] `type` (`NotificationType`), `targetUserId` (`Long`), `payload` (`String` — JSON-encoded data), `timestamp` (`OffsetDateTime`)
 
-### EntityMapper updates (`util/EntityMapper.java`)
-- [x] Add `toAttachmentResponse(Attachment attachment)` — `downloadUrl` = `"/api/attachments/" + attachment.getId()`
-- [x] Add `toMessageResponse(Message message, List<AttachmentResponse> attachments)` — maps all fields; `replyTo` is `null` if no reply
+### Update `entity/enums/KafkaTopic.java`
+- [x] Add `PRESENCE_STATE("presence.state")`
+- [x] Add `NOTIFICATIONS("notifications")`
 
 ---
 
-## 3. AppConstants additions (`util/AppConstants.java`)
+## 2. Database — Unread Counts
 
-- [x] Add Kafka topic constants:
-  - `TOPIC_CHAT_MESSAGES = "chat.messages"`
-  - `TOPIC_PRESENCE_EVENTS = "presence.events"`
-- [x] Add WebSocket destination constants:
-  - `WS_TOPIC_ROOMS = "/topic/rooms/"`
-  - `WS_QUEUE_MESSAGES = "/queue/messages"`
+### Flyway migration `V11__create_unread_counts.sql`
+- [x] Table `unread_counts`:
+  - `id` (`BIGSERIAL PK`)
+  - `user_id` (`BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE`)
+  - `room_id` (`BIGINT REFERENCES rooms(id) ON DELETE CASCADE`, nullable)
+  - `chat_user_id` (`BIGINT REFERENCES users(id) ON DELETE CASCADE`, nullable)
+  - `count` (`INT NOT NULL DEFAULT 0`)
+  - `CHECK` constraint: exactly one of `room_id` or `chat_user_id` is non-null
+  - `UNIQUE (user_id, room_id)`
+  - `UNIQUE (user_id, chat_user_id)`
 
----
+### Entity `entity/UnreadCount.java`
+- [x] `id`, `user` (`@ManyToOne` → User), `room` (`@ManyToOne` → Room, nullable), `chatUser` (`@ManyToOne` → User, nullable), `count` (`int`)
 
-## 4. Repository additions
-
-- [x] `MessageRepository` — add cursor-based pagination queries:
-  - `@Query` method `findRoomMessages(Long roomId, OffsetDateTime before, Pageable pageable)` — returns messages where `room.id = roomId`, `deletedAt IS NULL`, `createdAt < before` (or all if `before` is null), ordered by `createdAt DESC`
-  - `@Query` method `findPersonalMessages(Long userId1, Long userId2, OffsetDateTime before, Pageable pageable)` — returns `PERSONAL` messages between the two users (both directions), `deletedAt IS NULL`, `createdAt < before`, ordered `DESC`
-- [x] `AttachmentRepository` — add:
-  - `List<Attachment> findByMessageIdIn(List<Long> messageIds)` — batch-load attachments for a list of messages
-  - `List<Attachment> findByMessageId(Long messageId)` — load attachments for a single message
-- [x] `ContactRepository` — add:
-  - `@Query` method `findAcceptedBetween(Long userId1, Long userId2)` → `Optional<Contact>` — finds an `ACCEPTED` contact record regardless of requester/addressee direction
-
----
-
-## 5. WebSocket Configuration (`configuration/WebSocketConfig.java`)
-
-- [x] `@Configuration @EnableWebSocketMessageBroker`
-- [x] `registerStompEndpoints`: endpoint `/ws` with SockJS fallback, allowed origins `*`
-- [x] `configureMessageBroker`: enable simple broker for `/topic` and `/user`; application destination prefix `/app`
-- [x] `configureClientInboundChannel`: add `JwtChannelInterceptor` to authenticate STOMP `CONNECT` frames
-
-### JWT Channel Interceptor (`websocket/JwtChannelInterceptor.java`)
-- [x] Implements `ChannelInterceptor`
-- [x] On `CONNECT`: extract `Authorization` header from STOMP native headers → validate JWT with `JwtTokenProvider` → set `UsernamePasswordAuthenticationToken` in `SecurityContextHolder` for the session
-- [x] On invalid/missing token: throw `MessagingException`
+### Repository `dao/UnreadCountRepository.java`
+- [x] `Optional<UnreadCount> findByUserIdAndRoomId(Long userId, Long roomId)`
+- [x] `Optional<UnreadCount> findByUserIdAndChatUserId(Long userId, Long chatUserId)`
+- [x] `List<UnreadCount> findByUserIdAndCountGreaterThan(Long userId, int count)` — for listing all chats with unreads
 
 ---
 
-## 6. WebSocket Event Listener (`websocket/StompEventListener.java`)
+## 3. Kafka Streams — Presence Aggregation
 
-- [x] `@Component` implementing `ApplicationListener<SessionConnectEvent>` and `ApplicationListener<SessionDisconnectEvent>`
-- [x] On connect: extract `userId` from principal → build `PresenceEvent(status="ONLINE")` → publish to `presence.events` via `PresenceEventProducer`
-- [x] On disconnect: same, with `status="OFFLINE"`
+### Kafka Streams configuration `configuration/KafkaStreamsConfig.java`
+- [x] `@Configuration @EnableKafkaStreams`
+- [x] `KafkaStreamsConfiguration` bean:
+  - `APPLICATION_ID_CONFIG = "chitchat-presence"`
+  - `BOOTSTRAP_SERVERS_CONFIG` from `${spring.kafka.bootstrap-servers}`
+  - `DEFAULT_KEY_SERDE_CLASS_CONFIG = Serdes.StringSerde.class`
+  - `DEFAULT_VALUE_SERDE_CLASS_CONFIG = Serdes.StringSerde.class`
 
----
-
-## 7. Kafka Layer
-
-### Producers
-- [x] `kafka/producer/MessageEventProducer.java`:
-  - `@Component`, inject `KafkaTemplate<String, ChatMessageEvent>`
-  - `void send(ChatMessageEvent event)` — key = `roomId.toString()` for room messages, `"dm:{min}:{max}"` for personal; topic = `AppConstants.TOPIC_CHAT_MESSAGES`
-- [x] `kafka/producer/PresenceEventProducer.java`:
-  - `@Component`, inject `KafkaTemplate<String, PresenceEvent>`
-  - `void send(PresenceEvent event)` — key = `userId.toString()`; topic = `AppConstants.TOPIC_PRESENCE_EVENTS`
-
-### Consumer
-- [x] `kafka/consumer/MessageEventConsumer.java`:
-  - `@Component`, `@KafkaListener(topics = AppConstants.TOPIC_CHAT_MESSAGES, groupId = "chitchat")`
-  - On `ChatMessageEvent`:
-    - If `ROOM`: send to `/topic/rooms/{roomId}` via `SimpMessagingTemplate`
-    - If `PERSONAL`: send to `/user/{recipientId}/queue/messages` via `SimpMessagingTemplate`
-
-### Kafka Configuration (`configuration/KafkaConfig.java`)
-- [x] Create `KafkaConfig.java`:
-  - `ProducerFactory<String, Object>` bean — JSON serializer for values
-  - `KafkaTemplate<String, Object>` bean
-  - `ConsumerFactory<String, Object>` bean — JSON deserializer, trusted packages `com.chitchat.app.kafka.events`
-  - `ConcurrentKafkaListenerContainerFactory` bean
+### Presence topology `kafka/streams/PresenceStateTopology.java`
+- [x] `@Component` with `@Bean KStream<String, String>` building the topology via `StreamsBuilder`
+- [x] Read from `presence.events` topic (String key = userId, String value = PresenceEvent JSON)
+- [x] `groupByKey()` → `aggregate()`:
+  - Initial value: `PresenceState(tabCount=0, lastHeartbeatMs=0, status=OFFLINE)`
+  - On `CONNECT`: `tabCount++`, `lastHeartbeatMs = now`, derive status
+  - On `DISCONNECT`: `tabCount--`, derive status
+  - On `HEARTBEAT`: `lastHeartbeatMs = now`, derive status
+  - Derive status: `tabCount == 0 → OFFLINE`, `now - lastHeartbeatMs < 60_000 → ONLINE`, else `AFK`
+- [x] `toStream()` → map to `PresenceStateEvent` JSON → `to("presence.state")`
+- [x] Use `ObjectMapper` for JSON serialization/deserialization within the topology
 
 ---
 
-## 8. Service Layer
+## 4. Heartbeat Handler (`websocket/PresenceHeartbeatHandler.java`)
 
-### MessageService interface (`service/MessageService.java`)
-- [x] Define all methods:
-  - `MessageResponse sendRoomMessage(Long roomId, Long senderId, SendMessageRequest request)`
-  - `MessageResponse sendPersonalMessage(Long recipientId, Long senderId, SendMessageRequest request)`
-  - `MessageResponse editMessage(Long messageId, Long requesterId, EditMessageRequest request)`
-  - `void deleteMessage(Long messageId, Long requesterId)`
-  - `List<MessageResponse> getRoomMessages(Long roomId, Long requesterId, OffsetDateTime before, int limit)`
-  - `List<MessageResponse> getPersonalMessages(Long userId, Long requesterId, OffsetDateTime before, int limit)`
+- [x] `@Controller @RequiredArgsConstructor`
+- [x] `@MessageMapping("/presence/heartbeat")`:
+  - Extract `userId` from `Principal`
+  - Publish `PresenceEvent(action=HEARTBEAT, status=ONLINE)` to `presence.events` via `PresenceEventProducer`
+  - Track `lastHeartbeatMs` per userId in `ConcurrentHashMap`
+- [x] `@Scheduled(fixedRate = 30_000)` — AFK timer:
+  - Iterate all tracked users
+  - If `now - lastHeartbeat > 60_000` and user not already marked AFK: publish `PresenceEvent(action=HEARTBEAT, status=AFK)`
+  - Mark as AFK in local map to avoid re-publishing
+  - Remove entries for users who have disconnected (tabCount == 0)
 
-### MessageServiceImpl (`service/MessageServiceImpl.java`)
-- [x] `sendRoomMessage`:
-  - Load room → `ResourceNotFoundException` if absent
-  - Verify sender is a room member → `ForbiddenException`
-  - If `replyToId` present, load reply message → `ResourceNotFoundException` if absent
-  - Save `Message` (chatType=ROOM, room, sender, content, replyTo, createdAt)
-  - Publish `ChatMessageEvent(eventType="CREATED")` via `MessageEventProducer`
-  - Return `MessageResponse`
-- [x] `sendPersonalMessage`:
-  - Load recipient → `ResourceNotFoundException` if absent
-  - Check accepted friendship via `contactRepository.findAcceptedBetween` → `ForbiddenException` if not friends
-  - Check neither banned the other via `userBanRepository` (two calls) → `ForbiddenException` if banned
-  - Save `Message` (chatType=PERSONAL, sender, recipient, content, replyTo, createdAt)
-  - Publish `ChatMessageEvent(eventType="CREATED")` via `MessageEventProducer`
-  - Return `MessageResponse`
-- [x] `editMessage`:
-  - Load message → `ResourceNotFoundException` if absent or soft-deleted
-  - Verify requester is the author → `ForbiddenException`
-  - Update `content`, set `editedAt = now()`, save
-  - Publish `ChatMessageEvent(eventType="EDITED")` via `MessageEventProducer`
-  - Return `MessageResponse`
-- [x] `deleteMessage`:
-  - Load message → `ResourceNotFoundException` if absent or soft-deleted
-  - For ROOM messages: allow author OR room admin/owner → `ForbiddenException` otherwise
-  - For PERSONAL messages: allow author only → `ForbiddenException` otherwise
-  - Soft-delete: set `deletedAt = now()`, save
-  - Publish `ChatMessageEvent(eventType="DELETED")` via `MessageEventProducer`
-- [x] `getRoomMessages`:
-  - Load room → `ResourceNotFoundException` if absent
-  - If PRIVATE: verify requester is a member → `ForbiddenException`
-  - Query `messageRepository.findRoomMessages(roomId, before, PageRequest.of(0, limit))`
-  - Batch-load attachments via `attachmentRepository.findByMessageIdIn`
-  - Return `List<MessageResponse>`
-- [x] `getPersonalMessages`:
-  - Verify requester is one of the two participants → `ForbiddenException`
-  - Query `messageRepository.findPersonalMessages(requesterId, userId, before, PageRequest.of(0, limit))`
-  - Batch-load attachments
-  - Return `List<MessageResponse>`
+### Update `StompEventListener.java`
+- [x] Set `action = PresenceAction.CONNECT` for connect events
+- [x] Set `action = PresenceAction.DISCONNECT` for disconnect events
+- [x] On disconnect: remove userId from heartbeat tracking map in `PresenceHeartbeatHandler`
 
-### AttachmentService interface (`service/AttachmentService.java`)
-- [x] Define methods:
-  - `AttachmentResponse upload(Long uploaderId, MultipartFile file, String comment, String contextType, Long contextId)`
-  - `org.springframework.core.io.Resource download(Long attachmentId, Long requesterId)`
-
-### AttachmentServiceImpl (`service/AttachmentServiceImpl.java`)
-- [x] `upload`:
-  - Validate file size: images (`image/*`) ≤ 3 MB; others ≤ 20 MB → `ValidationException` if exceeded
-  - Generate unique stored filename (`UUID + original extension`); write to `${app.storage.location}/`
-  - Save `Attachment` entity (uploaderId, originalFilename, storedPath, fileSize, mimeType, comment, createdAt)
-  - Return `AttachmentResponse`
-- [x] `download`:
-  - Load attachment → `ResourceNotFoundException` if absent
-  - Access check: if linked to a room message → requester must be room member; if personal → sender or recipient; if unlinked → uploader only → `ForbiddenException`
-  - Return `UrlResource` pointing to stored file path
+### AppConstants additions
+- [x] Add `WS_TOPIC_ROOMS_PRESENCE_SUFFIX = "/presence"` (for `/topic/rooms/{roomId}/presence`)
 
 ---
 
-## 9. WebSocket Message Controller (`websocket/RoomMessageWsController.java`)
+## 5. Presence State Consumer (`kafka/consumer/PresenceStateConsumer.java`)
 
-- [x] `@Controller`
-- [x] `@MessageMapping("/rooms/{roomId}/send")` → calls `messageService.sendRoomMessage`; result published to Kafka; consumer fans out to `/topic/rooms/{roomId}`
-- [x] `@MessageMapping("/chats/{userId}/send")` → calls `messageService.sendPersonalMessage`; consumer fans out to `/user/{recipientId}/queue/messages`
-
----
-
-## 10. REST Controllers
-
-### MessageController (`rest/MessageController.java`)
-- [x] `GET /api/rooms/{roomId}/messages` — params: `before` (ISO datetime, optional), `limit` (default 50, max 100); returns 200 + `List<MessageResponse>`
-- [x] `PUT /api/messages/{messageId}` — `@Valid`; returns 200 + `MessageResponse`
-- [x] `DELETE /api/messages/{messageId}` — returns 204
-- [x] `GET /api/chats/{userId}/messages` — params: `before`, `limit`; returns 200 + `List<MessageResponse>`
-
-### AttachmentController (`rest/AttachmentController.java`)
-- [x] `POST /api/attachments` — `multipart/form-data`: `file`, `comment` (optional), `contextType` (optional), `contextId` (optional); returns 201 + `AttachmentResponse`
-- [x] `GET /api/attachments/{attachmentId}` — streams file with `Content-Disposition` and `Content-Type` headers; returns 200
+- [x] `@Component @RequiredArgsConstructor`
+- [x] `@KafkaListener(topics = "presence.state", groupId = "chitchat")`
+- [x] On `PresenceStateEvent`:
+  - Parse JSON to `PresenceStateEvent`
+  - Look up user's rooms via `RoomMemberRepository.findByIdUserId(userId)`
+  - For each room: send to `/topic/rooms/{roomId}/presence` via `SimpMessagingTemplate`
+  - Payload: `{ "userId": ..., "username": ..., "status": "ONLINE|AFK|OFFLINE" }`
 
 ---
 
-## 11. Integration Tests (`src/test/java/com/chitchat/app/service/MessageServiceImplTest.java`)
+## 6. Notification Layer
 
-- [x] `sendRoomMessage_success` — message saved, Kafka event published
-- [x] `sendRoomMessage_notMember` → `ForbiddenException`
-- [x] `sendRoomMessage_withReply_success` — replyTo field set
-- [x] `sendPersonalMessage_success` — friendship confirmed, message saved
-- [x] `sendPersonalMessage_notFriends` → `ForbiddenException`
-- [x] `sendPersonalMessage_senderBannedByRecipient` → `ForbiddenException`
-- [x] `sendPersonalMessage_recipientBannedBySender` → `ForbiddenException`
-- [x] `editMessage_success_authorOnly` — content updated, `editedAt` set
-- [x] `editMessage_notAuthor` → `ForbiddenException`
-- [x] `editMessage_deletedMessage` → `ResourceNotFoundException`
-- [x] `deleteMessage_byAuthor_success` — `deletedAt` set
-- [x] `deleteMessage_byRoomAdmin_success` — admin can soft-delete
-- [x] `deleteMessage_unauthorized` → `ForbiddenException`
-- [x] `getRoomMessages_publicRoom_success` — returns paginated list
-- [x] `getRoomMessages_privateRoom_nonMember` → `ForbiddenException`
-- [x] `getPersonalMessages_success`
-- [x] `getPersonalMessages_notParticipant` → `ForbiddenException`
+### Producer `kafka/producer/NotificationEventProducer.java`
+- [x] `@Component`, inject `KafkaTemplate<String, Object>`
+- [x] `void send(NotificationEvent event)` — key = `targetUserId.toString()`; topic = `KafkaTopic.NOTIFICATIONS.getTopicName()`
+
+### Consumer `kafka/consumer/NotificationConsumer.java`
+- [x] `@Component @RequiredArgsConstructor`
+- [x] `@KafkaListener(topics = "notifications", groupId = "chitchat")`
+- [x] On `NotificationEvent`:
+  - Parse JSON
+  - Send to `/user/{targetUserId}/queue/notifications` via `SimpMessagingTemplate`
 
 ---
 
-## 12. Smoke Test Checklist (Manual Verification)
+## 7. Notification Service
 
-- [x] `POST /api/attachments` — 201; file written to `${app.storage.location}`
-- [x] `GET /api/attachments/{id}` — binary file returned; 403 for non-member
-- [x] Connect WebSocket client to `/ws`; subscribe to `/topic/rooms/{roomId}`
-- [x] Send message via REST `POST /api/rooms/{roomId}/messages` → 201; WebSocket subscriber receives `MessageEvent`
-- [x] Edit via `PUT /api/messages/{id}` → WebSocket delivers `EDITED` event
-- [x] Delete via `DELETE /api/messages/{id}` → WebSocket delivers `DELETED` event
-- [x] `GET /api/rooms/{roomId}/messages?limit=10` — returns up to 10 messages newest-first
-- [x] `GET /api/rooms/{roomId}/messages?before=<timestamp>&limit=10` — cursor pagination works
-- [x] Send personal message between two friends → received on `/user/queue/messages`
-- [x] Attempt personal message without friendship → 403
+### Interface `service/NotificationService.java`
+- [x] `void incrementRoomUnread(Long roomId, Long senderIdToExclude)`
+- [x] `void incrementPersonalUnread(Long recipientId, Long senderId)`
+- [x] `void resetRoomUnread(Long userId, Long roomId)`
+- [x] `void resetPersonalUnread(Long userId, Long chatUserId)`
+- [x] `List<UnreadCountResponse> getUnreadCounts(Long userId)`
+
+### Impl `service/NotificationServiceImpl.java`
+- [x] `incrementRoomUnread`:
+  - Load all room members via `RoomMemberRepository.findByIdRoomId(roomId)`
+  - For each member except `senderIdToExclude`: upsert `UnreadCount` record, `count++`
+  - Publish `NotificationEvent(type=UNREAD_UPDATE)` for each affected user via `NotificationEventProducer`
+- [x] `incrementPersonalUnread`:
+  - Upsert `UnreadCount` for `(recipientId, chatUserId=senderId)`, `count++`
+  - Publish `NotificationEvent(type=UNREAD_UPDATE)` for recipient
+- [x] `resetRoomUnread`:
+  - Find `UnreadCount` by `(userId, roomId)`, set `count = 0`
+- [x] `resetPersonalUnread`:
+  - Find `UnreadCount` by `(userId, chatUserId)`, set `count = 0`
+- [x] `getUnreadCounts`:
+  - Query `UnreadCountRepository.findByUserIdAndCountGreaterThan(userId, 0)`
+  - Return list of `UnreadCountResponse`
+
+### Response DTO `dto/response/UnreadCountResponse.java`
+- [x] `roomId` (`Long`, nullable), `chatUserId` (`Long`, nullable), `count` (`int`)
+
+### EntityMapper update
+- [x] Add `toUnreadCountResponse(UnreadCount unreadCount)` static method
+
+---
+
+## 8. Integration with MessageService
+
+### Update `MessageServiceImpl.java`
+- [x] Inject `NotificationService`
+- [x] After `sendRoomMessage` saves message: call `notificationService.incrementRoomUnread(roomId, senderId)`
+- [x] After `sendPersonalMessage` saves message: call `notificationService.incrementPersonalUnread(recipientId, senderId)`
+
+---
+
+## 9. REST Endpoints for Unread Counts
+
+### Update `MessageController.java` or new `NotificationController.java`
+- [x] `GET /api/notifications/unread` → `getUnreadCounts`; returns 200 + `List<UnreadCountResponse>`
+- [x] `POST /api/rooms/{roomId}/messages/read` → `resetRoomUnread`; returns 204
+- [x] `POST /api/chats/{userId}/messages/read` → `resetPersonalUnread`; returns 204
+
+---
+
+## 10. Enable Scheduling
+
+### Update or create `configuration/SchedulingConfig.java`
+- [x] `@Configuration @EnableScheduling`
+
+---
+
+## 11. Integration Tests
+
+### `src/test/java/com/chitchat/app/service/NotificationServiceImplTest.java`
+- [x] `incrementRoomUnread_success` — unread count incremented for all members except sender
+- [x] `incrementRoomUnread_excludesSender` — sender's count not incremented
+- [x] `incrementPersonalUnread_success` — recipient's count incremented
+- [x] `resetRoomUnread_success` — count set to 0
+- [x] `resetPersonalUnread_success` — count set to 0
+- [x] `getUnreadCounts_returnsOnlyNonZero`
+
+### `src/test/java/com/chitchat/app/kafka/streams/PresenceStateTopologyTest.java`
+- [x] `connect_incrementsTabCount_statusOnline`
+- [x] `disconnect_decrementsTabCount_statusOffline`
+- [x] `multipleConnects_thenOneDisconnect_remainsOnline`
+- [x] `heartbeat_updatesLastHeartbeat`
+- [x] `noHeartbeat_afkEventReceived_statusAfk`
+
+---
+
+## 12. Access-Control & Routing Summary
+
+| Component | Input | Output |
+|---|---|---|
+| `StompEventListener` | WebSocket CONNECT/DISCONNECT | `presence.events` Kafka topic |
+| `PresenceHeartbeatHandler` | `/app/presence/heartbeat` (WebSocket) + `@Scheduled` | `presence.events` Kafka topic |
+| `PresenceStateTopology` (Kafka Streams) | `presence.events` topic | `presence.state` topic (KTable changelog) |
+| `PresenceStateConsumer` | `presence.state` topic | `/topic/rooms/{roomId}/presence` (WebSocket) |
+| `NotificationEventProducer` | Service calls | `notifications` topic |
+| `NotificationConsumer` | `notifications` topic | `/user/{userId}/queue/notifications` (WebSocket) |
+| `NotificationService` | Message send events | DB `unread_counts` + notifications topic |
+
+---
+
+## 13. Smoke Test Checklist (Manual Verification)
+
+- [x] Connect WebSocket, subscribe to `/topic/rooms/{roomId}/presence` → receive `ONLINE` event
+- [x] Disconnect WebSocket → subscribers receive `OFFLINE` event
+- [x] Send heartbeat every 30s → status stays `ONLINE`
+- [x] Stop heartbeats for 60s+ → subscribers receive `AFK` event
+- [x] Open two tabs (two WebSocket connections) → close one → status stays `ONLINE`
+- [x] Close both tabs → status becomes `OFFLINE`
+- [x] Send a room message → all members (except sender) get `UNREAD_UPDATE` notification
+- [x] `GET /api/notifications/unread` → returns non-zero counts
+- [x] `POST /api/rooms/{roomId}/messages/read` → resets room unread count to 0
+- [x] Send personal message → recipient gets `UNREAD_UPDATE` notification
+- [x] `POST /api/chats/{userId}/messages/read` → resets personal unread count to 0
 - [x] `mvn test` — all tests pass

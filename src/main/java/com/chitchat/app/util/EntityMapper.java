@@ -3,6 +3,7 @@ package com.chitchat.app.util;
 import com.chitchat.app.dto.response.AttachmentResponse;
 import com.chitchat.app.dto.response.AuthResponse;
 import com.chitchat.app.dto.response.BanResponse;
+import com.chitchat.app.dto.response.UnreadCountResponse;
 import com.chitchat.app.entity.enums.MessageEventType;
 import com.chitchat.app.kafka.events.ChatMessageEvent;
 import com.chitchat.app.dto.response.MemberResponse;
@@ -15,6 +16,7 @@ import com.chitchat.app.entity.Message;
 import com.chitchat.app.entity.Room;
 import com.chitchat.app.entity.RoomBan;
 import com.chitchat.app.entity.RoomMember;
+import com.chitchat.app.entity.UnreadCount;
 import com.chitchat.app.entity.User;
 import com.chitchat.app.entity.UserSession;
 
@@ -118,6 +120,14 @@ public final class EntityMapper {
                 .attachmentIds(List.of())
                 .eventType(eventType)
                 .createdAt(message.getCreatedAt())
+                .build();
+    }
+
+    public static UnreadCountResponse toUnreadCountResponse(UnreadCount unreadCount) {
+        return UnreadCountResponse.builder()
+                .roomId(unreadCount.getRoom() != null ? unreadCount.getRoom().getId() : null)
+                .chatUserId(unreadCount.getChatUser() != null ? unreadCount.getChatUser().getId() : null)
+                .count(unreadCount.getCount())
                 .build();
     }
 }

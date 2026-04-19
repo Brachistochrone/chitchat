@@ -20,7 +20,16 @@ public final class AppConstants {
     public static final String API_DOCS_PATH        = "/v3/api-docs/**";
     public static final String WEBSOCKET_PATH       = "/ws/**";
 
+    // ── Kafka ─────────────────────────────────────────────────────────
+    public static final String KAFKA_GROUP_ID                = "chitchat";
+    public static final String KAFKA_STREAMS_APP_ID          = "chitchat-presence";
+    public static final String KAFKA_TOPIC_CHAT_MESSAGES     = "chat.messages";
+    public static final String KAFKA_TOPIC_PRESENCE_STATE    = "presence.state";
+    public static final String KAFKA_TOPIC_NOTIFICATIONS     = "notifications";
+
     // ── WebSocket Destinations ────────────────────────────────────────
     public static final String WS_TOPIC_ROOMS       = "/topic/rooms/";
     public static final String WS_QUEUE_MESSAGES    = "/queue/messages";
+    public static final String WS_QUEUE_NOTIFICATIONS = "/queue/notifications";
+    public static final String WS_TOPIC_ROOMS_PRESENCE_SUFFIX = "/presence";
 }

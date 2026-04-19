@@ -18,7 +18,7 @@ public class MessageEventConsumer {
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "chat.messages", groupId = "chitchat")
+    @KafkaListener(topics = AppConstants.KAFKA_TOPIC_CHAT_MESSAGES, groupId = AppConstants.KAFKA_GROUP_ID)
     public void consume(String payload) {
         try {
             ChatMessageEvent event = objectMapper.readValue(payload, ChatMessageEvent.class);
