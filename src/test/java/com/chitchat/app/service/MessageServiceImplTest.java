@@ -3,6 +3,7 @@ package com.chitchat.app.service;
 import com.chitchat.app.dao.AttachmentRepository;
 import com.chitchat.app.dao.ContactRepository;
 import com.chitchat.app.dao.MessageRepository;
+import com.chitchat.app.dao.RoomBanRepository;
 import com.chitchat.app.dao.RoomMemberRepository;
 import com.chitchat.app.dao.UserBanRepository;
 import com.chitchat.app.dto.request.EditMessageRequest;
@@ -47,6 +48,7 @@ class MessageServiceImplTest {
     @Mock private AttachmentRepository attachmentRepository;
     @Mock private ContactRepository contactRepository;
     @Mock private UserBanRepository userBanRepository;
+    @Mock private RoomBanRepository roomBanRepository;
     @Mock private RoomMemberRepository roomMemberRepository;
     @Mock private MessageEventProducer messageEventProducer;
     @Mock private EntityLoaderService entityLoader;
@@ -353,6 +355,15 @@ class MessageServiceImplTest {
     @Test
     void getPersonalMessages_notParticipant_throwsForbidden() {
         assertThatThrownBy(() -> messageService.getPersonalMessages(1L, 1L, null, 50))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void getRoomMessages_bannedUser_throwsForbidden() {
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
+        when(roomBanRepository.existsByIdRoomIdAndIdUserId(10L, 3L)).thenReturn(true);
+
+        assertThatThrownBy(() -> messageService.getRoomMessages(10L, 3L, null, 50))
                 .isInstanceOf(ForbiddenException.class);
     }
 }

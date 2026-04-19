@@ -28,6 +28,7 @@ import com.chitchat.app.exception.ResourceNotFoundException;
 import com.chitchat.app.util.EntityMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -101,6 +102,7 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(value = "rooms", key = "#roomId")
     public RoomResponse updateRoom(Long roomId, Long requesterId, UpdateRoomRequest request) {
         Room room = entityLoader.loadRoom(roomId);
         requireOwner(room, requesterId);
@@ -124,6 +126,7 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(value = "rooms", key = "#roomId")
     public void deleteRoom(Long roomId, Long requesterId) {
         Room room = entityLoader.loadRoom(roomId);
         requireOwner(room, requesterId);

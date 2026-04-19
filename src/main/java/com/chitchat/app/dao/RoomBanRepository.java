@@ -14,4 +14,6 @@ public interface RoomBanRepository extends JpaRepository<RoomBan, RoomBanId> {
     boolean existsByIdRoomIdAndIdUserId(Long roomId, Long userId);
 
     Optional<RoomBan> findByIdRoomIdAndIdUserId(Long roomId, Long userId);
+
+    void deleteByIdUserId(Long userId);
 }

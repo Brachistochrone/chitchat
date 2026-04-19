@@ -1,6 +1,7 @@
 package com.chitchat.app.service;
 
 import com.chitchat.app.dao.AttachmentRepository;
+import com.chitchat.app.dao.RoomBanRepository;
 import com.chitchat.app.dao.RoomMemberRepository;
 import com.chitchat.app.dao.UserRepository;
 import com.chitchat.app.dto.response.AttachmentResponse;
@@ -40,6 +41,7 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final UserRepository userRepository;
+    private final RoomBanRepository roomBanRepository;
     private final RoomMemberRepository roomMemberRepository;
 
     @Value("${app.storage.location}")
@@ -121,6 +123,9 @@ public class AttachmentServiceImpl implements AttachmentService {
         if (ChatType.ROOM.equals(attachment.getMessage().getChatType())
                 && attachment.getMessage().getRoom() != null) {
             Long roomId = attachment.getMessage().getRoom().getId();
+            if (roomBanRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
+                throw new ForbiddenException("You are banned from this room");
+            }
             if (!roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
                 throw new ForbiddenException("You must be a room member to download this file");
             }

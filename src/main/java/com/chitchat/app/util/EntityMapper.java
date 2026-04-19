@@ -3,6 +3,7 @@ package com.chitchat.app.util;
 import com.chitchat.app.dto.response.AttachmentResponse;
 import com.chitchat.app.dto.response.AuthResponse;
 import com.chitchat.app.dto.response.BanResponse;
+import com.chitchat.app.dto.response.ContactResponse;
 import com.chitchat.app.dto.response.UnreadCountResponse;
 import com.chitchat.app.entity.enums.MessageEventType;
 import com.chitchat.app.kafka.events.ChatMessageEvent;
@@ -12,6 +13,7 @@ import com.chitchat.app.dto.response.RoomResponse;
 import com.chitchat.app.dto.response.SessionResponse;
 import com.chitchat.app.dto.response.UserResponse;
 import com.chitchat.app.entity.Attachment;
+import com.chitchat.app.entity.Contact;
 import com.chitchat.app.entity.Message;
 import com.chitchat.app.entity.Room;
 import com.chitchat.app.entity.RoomBan;
@@ -120,6 +122,18 @@ public final class EntityMapper {
                 .attachmentIds(List.of())
                 .eventType(eventType)
                 .createdAt(message.getCreatedAt())
+                .build();
+    }
+
+    public static ContactResponse toContactResponse(Contact contact, Long requesterId) {
+        User otherUser = contact.getRequester().getId().equals(requesterId)
+                ? contact.getAddressee() : contact.getRequester();
+        return ContactResponse.builder()
+                .id(contact.getId())
+                .user(toUserResponse(otherUser))
+                .status(contact.getStatus())
+                .message(contact.getMessage())
+                .createdAt(contact.getCreatedAt())
                 .build();
     }
 
