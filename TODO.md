@@ -1,214 +1,219 @@
-# TODO — Milestone 7: Project Setup, Auth & Layout Shell
+# TODO — Milestone 8: Rooms, Messages & Real-Time
 
 ---
 
-## 1. Project Scaffolding
+## 1. Install Additional Dependencies
 
-### Vite + React + TypeScript
-- [x] Run `npm create vite@latest frontend -- --template react-ts` from project root
-- [x] Verify `frontend/` directory structure: `src/`, `public/`, `index.html`, `vite.config.ts`, `tsconfig.json`
-
-### Install dependencies
-- [x] Core: `react-router-dom`, `zustand`, `axios`
-- [x] Styling: `tailwindcss @tailwindcss/vite` (Tailwind v4 Vite plugin)
-- [x] Icons: `lucide-react`
-- [x] Toasts: `react-hot-toast`
-- [x] Date: `date-fns`
-
-### Tailwind CSS setup
-- [x] Add `@tailwindcss/vite` plugin to `vite.config.ts`
-- [x] Add `@import "tailwindcss"` to `src/index.css`
-- [x] Verify Tailwind classes render correctly
-
-### Vite dev proxy
-- [x] In `vite.config.ts`, configure proxy: `/api` → `http://localhost:8080`, `/ws` → `http://localhost:8080` (WebSocket upgrade)
-
-### .gitignore
-- [x] Add `frontend/node_modules/`, `frontend/dist/` to project `.gitignore`
+- [x] `npm install @stomp/stompjs sockjs-client`
+- [x] `npm install -D @types/sockjs-client`
+- [x] `npm install emoji-mart @emoji-mart/data @emoji-mart/react`
 
 ---
 
-## 2. Project Structure (`frontend/src/`)
+## 2. API Layer — Rooms, Messages, Attachments (`src/api/`)
 
-### Directory layout
-- [x] Create directory structure:
-  ```
-  src/
-  ├── api/           # Axios instance + API functions
-  ├── components/    # Reusable UI components
-  │   ├── auth/      # Login, Register, ForgotPassword modals
-  │   ├── layout/    # TopNav, Sidebar, RightPanel, MainLayout
-  │   └── ui/        # Button, Modal, Input, etc.
-  ├── pages/         # Route-level components
-  ├── stores/        # Zustand stores
-  ├── types/         # TypeScript interfaces
-  ├── hooks/         # Custom React hooks
-  └── utils/         # Helper functions
-  ```
+### `rooms.ts`
+- [x] `searchPublicRooms(query, page, size)` → `GET /rooms?q=&page=&size=` → `Page<Room>`
+- [x] `createRoom(name, description, visibility)` → `POST /rooms` → `Room`
+- [x] `getRoom(roomId)` → `GET /rooms/{roomId}` → `Room`
+- [x] `joinRoom(roomId)` → `POST /rooms/{roomId}/join`
+- [x] `leaveRoom(roomId)` → `POST /rooms/{roomId}/leave`
+- [x] `getMembers(roomId)` → `GET /rooms/{roomId}/members` → `MemberResponse[]`
 
----
+### `messages.ts`
+- [x] `getRoomMessages(roomId, before?, limit?)` → `GET /rooms/{roomId}/messages?before=&limit=` → `Message[]`
+- [x] `sendRoomMessage(roomId, content, replyToId?, attachmentIds?)` → `POST /rooms/{roomId}/messages` → `Message`
+- [x] `editMessage(messageId, content)` → `PUT /messages/{messageId}` → `Message`
+- [x] `deleteMessage(messageId)` → `DELETE /messages/{messageId}`
 
-## 3. TypeScript Types (`src/types/`)
+### `attachments.ts`
+- [x] `uploadAttachment(file, comment?)` → `POST /attachments` (multipart/form-data) → `Attachment`
+- [x] `getAttachmentUrl(attachmentId)` → returns `/api/attachments/{id}` (download URL)
 
-### `api.ts`
-- [x] `User`: `id`, `username`, `displayName`, `createdAt`
-- [x] `AuthResponse`: `token`, `user: User`
-- [x] `Room`: `id`, `name`, `description`, `visibility`, `owner: User`, `memberCount`, `createdAt`
-- [x] `Message`: `id`, `chatType`, `sender: User`, `content`, `replyTo: Message | null`, `attachments: Attachment[]`, `editedAt`, `createdAt`
-- [x] `Attachment`: `id`, `originalFilename`, `fileSize`, `mimeType`, `comment`, `downloadUrl`
-- [x] `Session`: `id`, `browser`, `ipAddress`, `lastSeenAt`, `current`
-- [x] `Contact`: `id`, `user: User`, `status`, `message`, `createdAt`
-- [x] `MemberResponse`: `user: User`, `role`, `joinedAt`
-- [x] `UnreadCount`: `roomId`, `chatUserId`, `count`
+### `notifications.ts`
+- [x] `getUnreadCounts()` → `GET /notifications/unread` → `UnreadCount[]`
+- [x] `markRoomRead(roomId)` → `POST /rooms/{roomId}/messages/read`
 
 ---
 
-## 4. API Layer (`src/api/`)
+## 3. Additional Types (`src/types/`)
 
-### Axios instance (`src/api/client.ts`)
-- [x] Create Axios instance with `baseURL: '/api'`
-- [x] Request interceptor: attach `Authorization: Bearer <token>` from `useAuthStore`
-- [x] Response interceptor: on 401, clear token + redirect to `/`
-
-### Auth API (`src/api/auth.ts`)
-- [x] `register(email, password, username)` → `POST /auth/register` → `AuthResponse`
-- [x] `login(email, password)` → `POST /auth/login` → `AuthResponse`
-- [x] `logout()` → `POST /auth/logout`
-- [x] `requestPasswordReset(email)` → `POST /auth/password-reset/request`
-- [x] `confirmPasswordReset(token, newPassword)` → `POST /auth/password-reset/confirm`
-
-### User API (`src/api/users.ts`)
-- [x] `getMe()` → `GET /users/me` → `User`
-- [x] `updateProfile(displayName)` → `PUT /users/me` → `User`
+### `api.ts` additions
+- [x] `ChatMessageEvent`: `messageId`, `chatType`, `roomId`, `senderId`, `recipientId`, `content`, `replyToId`, `attachmentIds`, `eventType` (`CREATED`|`EDITED`|`DELETED`), `createdAt`
+- [x] `PresenceUpdate`: `userId`, `username`, `status` (`ONLINE`|`AFK`|`OFFLINE`)
+- [x] `PageResponse<T>`: `content: T[]`, `totalElements: number`, `totalPages: number`
 
 ---
 
-## 5. Zustand Stores (`src/stores/`)
+## 4. WebSocket Service (`src/api/websocket.ts`)
 
-### `useAuthStore.ts`
-- [x] State: `token: string | null`, `user: User | null`, `isAuthenticated: boolean`
-- [x] Actions: `setAuth(token, user)`, `clearAuth()`, `loadFromStorage()`
-- [x] Persist token in `localStorage`
-- [x] On init: check `localStorage` for existing token → set `isAuthenticated`
-
-### `useRoomStore.ts` (scaffold only)
-- [x] State: `rooms: Room[]`, `selectedRoomId: number | null`
-- [x] Actions: `setRooms(rooms)`, `selectRoom(id)` — placeholders for M8
-
-### `useMessageStore.ts` (scaffold only)
-- [x] State: `messages: Message[]`, `loading: boolean`
-- [x] Actions: `setMessages(msgs)`, `addMessage(msg)` — placeholders for M8
+- [x] Create STOMP client using `@stomp/stompjs` with SockJS transport
+- [x] `connect(token)` — connect to `/ws` with JWT in STOMP `Authorization` header
+- [x] `disconnect()` — gracefully disconnect
+- [x] `subscribe(destination, callback)` — subscribe to a STOMP destination, return unsubscribe function
+- [x] `send(destination, body)` — send a STOMP message
+- [x] Auto-reconnect on disconnect with exponential backoff (1s, 2s, 4s, max 30s)
+- [x] Expose connection status (`connected`, `connecting`, `disconnected`)
 
 ---
 
-## 6. Routing (`src/App.tsx`)
+## 5. Zustand Store Updates (`src/stores/`)
 
-### React Router setup
-- [x] Routes:
-  - `/` → `LandingPage`
-  - `/chat` → `ChatPage` (protected)
-  - `*` → redirect to `/`
-- [x] `ProtectedRoute` wrapper component: if `!isAuthenticated` → redirect to `/`
+### `useRoomStore.ts` — full implementation
+- [x] State: `rooms: Room[]`, `selectedRoomId: number | null`, `members: MemberResponse[]`, `loading: boolean`
+- [x] Actions:
+  - `fetchRooms()` — calls `searchPublicRooms`, sets rooms
+  - `selectRoom(id)` — sets selectedRoomId, fetches members
+  - `createRoom(...)` — calls API, adds to list, selects it
+  - `joinRoom(id)` — calls API, refreshes rooms
+  - `leaveRoom(id)` — calls API, deselects, refreshes rooms
+  - `setMembers(members)` — sets member list
+  - `updateMemberPresence(userId, status)` — updates a member's presence status
 
----
+### `useMessageStore.ts` — full implementation
+- [x] State: `messages: Message[]`, `loading: boolean`, `hasMore: boolean`, `replyTo: Message | null`
+- [x] Actions:
+  - `fetchMessages(roomId, before?)` — calls API, prepends or sets messages, updates `hasMore`
+  - `addMessage(message)` — appends new message
+  - `updateMessage(message)` — replaces edited message by ID
+  - `removeMessage(messageId)` — marks message as deleted (set content to null)
+  - `setReplyTo(message | null)` — sets the message being replied to
+  - `clearMessages()` — resets state when switching rooms
 
-## 7. Landing Page (`src/pages/LandingPage.tsx`)
-
-- [x] Centered layout with app logo/name "Chitchat"
-- [x] Two buttons: "Sign In" and "Register"
-- [x] Clicking either opens the respective auth modal
-- [x] If already authenticated (token in localStorage) → redirect to `/chat`
-
----
-
-## 8. Auth Modals (`src/components/auth/`)
-
-### Reusable Modal component (`src/components/ui/Modal.tsx`)
-- [x] Overlay backdrop (semi-transparent dark)
-- [x] Centered white card with close button
-- [x] Props: `isOpen`, `onClose`, `title`, `children`
-- [x] Close on backdrop click and Escape key
-
-### LoginModal (`src/components/auth/LoginModal.tsx`)
-- [x] Fields: email (text input), password (password input)
-- [x] "Sign In" button → calls `auth.login()` → on success: `setAuth(token, user)`, redirect to `/chat`
-- [x] "Forgot password?" link → switches to `ForgotPasswordModal`
-- [x] Inline error display on failed login
-- [x] Loading state on submit button
-
-### RegisterModal (`src/components/auth/RegisterModal.tsx`)
-- [x] Fields: email, username, password, confirm password
-- [x] Client-side validation: all fields required, passwords must match
-- [x] "Create Account" button → calls `auth.register()` → on success: `setAuth(token, user)`, redirect to `/chat`
-- [x] Inline error display on failed registration (duplicate email/username)
-
-### ForgotPasswordModal (`src/components/auth/ForgotPasswordModal.tsx`)
-- [x] Field: email
-- [x] "Send Reset Link" button → calls `auth.requestPasswordReset()`
-- [x] Success message: "Check your email for a reset link"
+### `useUnreadStore.ts` — new
+- [x] State: `unreads: Record<string, number>` (key = `room:{id}` or `chat:{id}`)
+- [x] Actions:
+  - `fetchUnreads()` — calls `getUnreadCounts()`, populates map
+  - `increment(key)` — increment count
+  - `reset(key)` — set count to 0 (on room open)
+  - `getCount(key)` — returns count for a key
 
 ---
 
-## 9. Chat Layout Shell (`src/pages/ChatPage.tsx` + `src/components/layout/`)
+## 6. WebSocket Hook (`src/hooks/useWebSocket.ts`)
 
-### TopNav (`src/components/layout/TopNav.tsx`)
-- [x] Fixed top bar with:
-  - Logo/app name (left)
-  - Navigation items: "Public Rooms", "Private Rooms", "Contacts", "Sessions" (center/left)
-  - User dropdown (right): display name, "Profile", "Sign out"
-- [x] "Sign out" → calls `auth.logout()` → `clearAuth()` → redirect to `/`
-- [x] Styled with Tailwind: dark background, white text, hover states
-
-### Sidebar (`src/components/layout/Sidebar.tsx`)
-- [x] Left column (~250px width)
-- [x] Placeholder content: "Rooms will appear here" / "Contacts will appear here"
-- [x] "Create Room" button at bottom (placeholder, non-functional in M7)
-
-### ChatArea (`src/components/layout/ChatArea.tsx`)
-- [x] Center column (flex-grow)
-- [x] Default state: centered welcome message "Select a room or contact to start chatting"
-- [x] Placeholder for message list and input bar
-
-### RightPanel (`src/components/layout/RightPanel.tsx`)
-- [x] Right column (~280px width)
-- [x] Placeholder content: "Room info and members will appear here"
-
-### ChatPage layout
-- [x] Composes: `TopNav` (fixed top) + 3-column grid (`Sidebar` | `ChatArea` | `RightPanel`)
-- [x] Full viewport height (`h-screen`), no page scroll
-- [x] Columns use `flex` layout: sidebar fixed width, chat area grows, right panel fixed width
+- [x] Custom hook that connects STOMP on mount (when authenticated), disconnects on unmount
+- [x] On connect: subscribe to `/user/queue/notifications` for unread updates
+- [x] Sends heartbeat `/app/presence/heartbeat` every 30 seconds
+- [x] Exposes `subscribe(destination, callback)` for components to use
+- [x] Uses `useAuthStore` token for connection
 
 ---
 
-## 10. Input Components (`src/components/ui/`)
+## 7. Sidebar — Room List (`src/components/layout/Sidebar.tsx`)
 
-### Button (`src/components/ui/Button.tsx`)
-- [x] Props: `variant` (`primary`, `secondary`, `danger`, `ghost`), `size` (`sm`, `md`, `lg`), `loading`, `disabled`, `children`, `onClick`
-- [x] Tailwind-styled with hover/focus states
-
-### Input (`src/components/ui/Input.tsx`)
-- [x] Props: `label`, `type`, `placeholder`, `value`, `onChange`, `error`
-- [x] Label above, error message below in red
-- [x] Tailwind-styled with focus ring
-
----
-
-## 11. Toast Notifications
-
-- [x] Add `<Toaster />` from `react-hot-toast` in `App.tsx`
-- [x] Use `toast.success()` / `toast.error()` for auth feedback (login success, registration error, etc.)
+### Replace placeholder with functional room list
+- [x] On mount: fetch rooms via `useRoomStore.fetchRooms()`
+- [x] Display rooms grouped: "Public Rooms" section, "Private Rooms" section
+- [x] Each room item shows: hash icon, room name, member count, unread badge (from `useUnreadStore`)
+- [x] Clicking a room: `selectRoom(id)`, `markRoomRead(roomId)`, reset unread
+- [x] Selected room highlighted with active background
+- [x] Search input filters rooms by name (client-side)
+- [x] "Create Room" button at bottom opens `CreateRoomModal`
 
 ---
 
-## 12. Verification
+## 8. Create Room Modal (`src/components/room/CreateRoomModal.tsx`)
 
-- [x] `cd frontend && npm install` — installs all dependencies
-- [x] `npm run dev` — Vite dev server starts at `http://localhost:5173`
-- [x] Landing page renders with Sign In / Register buttons
-- [x] Sign In modal opens, submits login request to backend, receives JWT, redirects to `/chat`
-- [x] Register modal opens, creates account, auto-login, redirects to `/chat`
-- [x] Chat page shows 3-column layout shell with top nav
-- [x] Sign out clears token, redirects to landing page
-- [x] Refreshing `/chat` with valid token stays on chat page
-- [x] Refreshing `/chat` without token redirects to landing
+- [x] Fields: name (required), description (optional), visibility (radio: Public / Private)
+- [x] "Create" button → calls `useRoomStore.createRoom()`
+- [x] On success: toast, close modal, room selected
+- [x] Validation: name required, max 100 chars
+
+---
+
+## 9. Chat Area — Message List + Input (`src/components/layout/ChatArea.tsx`)
+
+### Replace placeholder with functional chat view
+
+#### Room Header (`src/components/chat/RoomHeader.tsx`)
+- [x] Shows room name, description, visibility badge
+- [x] "Join" button if not a member (public rooms) / "Leave" button if member (non-owner)
+
+#### Message List (`src/components/chat/MessageList.tsx`)
+- [x] Renders list of messages in chronological order (oldest at top, newest at bottom)
+- [x] Each message renders via `MessageBubble` component
+- [x] Infinite scroll: on scroll to top, fetch older messages via `fetchMessages(roomId, oldestMessageCreatedAt)`
+- [x] Loading spinner at top while fetching
+- [x] Auto-scroll to bottom on new message **only if** user is at bottom
+- [x] "N new messages ↓" badge when new messages arrive while scrolled up — clicking scrolls to bottom
+
+#### MessageBubble (`src/components/chat/MessageBubble.tsx`)
+- [x] Shows: sender username, timestamp (via `date-fns format`), message content
+- [x] Reply quote: if `replyTo` exists, show quoted preview (username + truncated content) above message
+- [x] Attachments: images shown inline (`<img>`), files shown as download link with filename + size
+- [x] "Edited" indicator if `editedAt` is set
+- [x] Deleted messages: show "[message deleted]" in italic gray
+- [x] Hover actions: "Reply" button (sets `replyTo` in store)
+
+#### Message Input (`src/components/chat/MessageInput.tsx`)
+- [x] Multiline `<textarea>` with auto-resize
+- [x] Send button (or Enter key, Shift+Enter for newline)
+- [x] Emoji picker button → opens `emoji-mart` Picker → inserts emoji at cursor
+- [x] Attach button → file picker → uploads via `uploadAttachment()` → shows filename preview, removable
+- [x] Reply indicator: when `replyTo` is set, shows quoted preview above input with cancel (X) button
+- [x] On send: calls `sendRoomMessage(roomId, content, replyToId, attachmentIds)` → clears input + replyTo + attachments
+
+---
+
+## 10. Right Panel — Room Info & Members (`src/components/layout/RightPanel.tsx`)
+
+### Replace placeholder with functional panel
+- [x] Room info header: room name, visibility badge, owner username
+- [x] Member list: fetch via `useRoomStore` members
+- [x] Each member shows: username, role badge (Owner/Admin/Member), presence dot (green=online, yellow=AFK, gray=offline)
+- [x] Subscribe to `/topic/rooms/{roomId}/presence` for real-time presence updates → `updateMemberPresence()`
+
+---
+
+## 11. Real-Time Integration
+
+### Room message subscription
+- [x] When a room is selected: subscribe to `/topic/rooms/{roomId}`
+- [x] On `ChatMessageEvent` received:
+  - `CREATED` → `addMessage(...)` (map event to Message type, or re-fetch the message)
+  - `EDITED` → `updateMessage(...)`
+  - `DELETED` → `removeMessage(messageId)`
+- [x] When room changes: unsubscribe from previous room, subscribe to new
+
+### Presence subscription
+- [x] When a room is selected: subscribe to `/topic/rooms/{roomId}/presence`
+- [x] On `PresenceUpdate` received → `updateMemberPresence(userId, status)`
+- [x] When room changes: unsubscribe previous, subscribe new
+
+### Unread updates
+- [x] Subscribe to `/user/queue/notifications` (done in `useWebSocket` hook)
+- [x] On `UNREAD_UPDATE` event → `useUnreadStore.increment(key)`
+
+### Heartbeat
+- [x] Send `/app/presence/heartbeat` every 30s (done in `useWebSocket` hook)
+
+---
+
+## 12. Wire Up ChatPage
+
+### Update `ChatPage.tsx`
+- [x] Initialize `useWebSocket` hook
+- [x] Fetch rooms on mount
+- [x] Fetch unreads on mount
+- [x] Pass `selectedRoomId` to conditionally render `ChatArea` content vs welcome placeholder
+- [x] When `selectedRoomId` changes: fetch messages, fetch members, subscribe to room topics
+
+---
+
+## 13. Verification
+
 - [x] `npm run build` — production build succeeds
+- [x] Landing page → Register → redirects to `/chat` with 3-column layout
+- [x] Sidebar shows rooms fetched from API
+- [x] "Create Room" modal creates a room, appears in sidebar
+- [x] Clicking a room loads message history in center area
+- [x] Typing and sending a message appears in the message list
+- [x] Opening a second browser tab: message sent in one tab appears in the other in real time
+- [x] Scrolling up loads older messages (infinite scroll)
+- [x] Reply-to: clicking Reply shows quote, sends with replyToId
+- [x] Emoji picker inserts emoji into message
+- [x] File attach uploads file, message shows attachment link
+- [x] Right panel shows room members with presence dots
+- [x] Unread badges appear on rooms with new messages
+- [x] Heartbeat keeps connection alive
