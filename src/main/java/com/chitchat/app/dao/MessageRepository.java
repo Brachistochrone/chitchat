@@ -16,6 +16,10 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     @Query("DELETE FROM Message m WHERE m.room.id = :roomId")
     void deleteAllByRoomId(@Param("roomId") Long roomId);
 
+    @Modifying
+    @Query("DELETE FROM Message m WHERE m.sender.id = :senderId")
+    void deleteAllBySenderId(@Param("senderId") Long senderId);
+
     @Query("SELECT m FROM Message m WHERE m.room.id = :roomId AND m.deletedAt IS NULL " +
            "AND (:before IS NULL OR m.createdAt < :before) ORDER BY m.createdAt DESC")
     List<Message> findRoomMessages(@Param("roomId") Long roomId,

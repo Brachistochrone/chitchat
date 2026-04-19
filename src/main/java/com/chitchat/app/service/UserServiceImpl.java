@@ -8,6 +8,7 @@ import com.chitchat.app.exception.ResourceNotFoundException;
 import com.chitchat.app.util.EntityMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "users", key = "#userId")
     public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
         User user = findActiveUser(userId);
         user.setDisplayName(request.getDisplayName());

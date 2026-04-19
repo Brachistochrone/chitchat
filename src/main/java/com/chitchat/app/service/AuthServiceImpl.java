@@ -1,5 +1,13 @@
 package com.chitchat.app.service;
 
+import com.chitchat.app.dao.AttachmentRepository;
+import com.chitchat.app.dao.ContactRepository;
+import com.chitchat.app.dao.MessageRepository;
+import com.chitchat.app.dao.RoomBanRepository;
+import com.chitchat.app.dao.RoomMemberRepository;
+import com.chitchat.app.dao.RoomRepository;
+import com.chitchat.app.dao.UnreadCountRepository;
+import com.chitchat.app.dao.UserBanRepository;
 import com.chitchat.app.dao.UserRepository;
 import com.chitchat.app.dao.UserSessionRepository;
 import com.chitchat.app.dto.request.ChangePasswordRequest;
@@ -8,6 +16,8 @@ import com.chitchat.app.dto.request.PasswordResetConfirmDto;
 import com.chitchat.app.dto.request.PasswordResetRequestDto;
 import com.chitchat.app.dto.request.RegisterRequest;
 import com.chitchat.app.dto.response.AuthResponse;
+import com.chitchat.app.entity.Attachment;
+import com.chitchat.app.entity.Room;
 import com.chitchat.app.entity.User;
 import com.chitchat.app.entity.UserSession;
 import com.chitchat.app.exception.ConflictException;
@@ -21,10 +31,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -35,9 +52,20 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final UserSessionRepository userSessionRepository;
+    private final RoomRepository roomRepository;
+    private final RoomMemberRepository roomMemberRepository;
+    private final RoomBanRepository roomBanRepository;
+    private final MessageRepository messageRepository;
+    private final AttachmentRepository attachmentRepository;
+    private final ContactRepository contactRepository;
+    private final UserBanRepository userBanRepository;
+    private final UnreadCountRepository unreadCountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final JavaMailSender mailSender;
+
+    @Value("${app.storage.location}")
+    private String storageLocation;
 
     @Override
     @Transactional
@@ -136,12 +164,42 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "users", allEntries = true),
+            @CacheEvict(value = "rooms", allEntries = true)
+    })
     public void deleteAccount(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        user.setDeletedAt(OffsetDateTime.now());
-        userRepository.save(user);
-        log.info("Account soft-deleted for user id={}", userId);
+
+        // Delete files uploaded by user from filesystem
+        attachmentRepository.findByUploaderId(userId).forEach(att -> {
+            try {
+                Files.deleteIfExists(Paths.get(att.getStoredPath()));
+            } catch (IOException ex) {
+                log.warn("Failed to delete file: {}", att.getStoredPath());
+            }
+        });
+
+        // Delete owned rooms (cascades members, bans, invites via FK)
+        for (Room room : roomRepository.findByOwnerId(userId)) {
+            attachmentRepository.deleteAllByMessageRoomId(room.getId());
+            messageRepository.deleteAllByRoomId(room.getId());
+            roomRepository.delete(room);
+        }
+
+        // Delete user's attachments, messages, memberships, bans, contacts, unreads, sessions
+        attachmentRepository.deleteAll(attachmentRepository.findByUploaderId(userId));
+        messageRepository.deleteAllBySenderId(userId);
+        roomMemberRepository.deleteAll(roomMemberRepository.findByIdUserId(userId));
+        roomBanRepository.deleteByIdUserId(userId);
+        contactRepository.deleteAllByRequesterIdOrAddresseeId(userId);
+        userBanRepository.deleteAllByBannerIdOrBannedId(userId);
+        unreadCountRepository.deleteByUserId(userId);
+        userSessionRepository.deleteAll(userSessionRepository.findByUserIdAndRevokedFalse(userId));
+
+        userRepository.delete(user);
+        log.info("Account fully deleted for user id={}", userId);
     }
 
     private AuthResponse buildAuthResponse(User user, HttpServletRequest httpRequest) {

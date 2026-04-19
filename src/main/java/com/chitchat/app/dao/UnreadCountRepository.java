@@ -13,4 +13,6 @@ public interface UnreadCountRepository extends JpaRepository<UnreadCount, Long> 
     Optional<UnreadCount> findByUserIdAndChatUserId(Long userId, Long chatUserId);
 
     List<UnreadCount> findByUserIdAndCountGreaterThan(Long userId, int count);
+
+    void deleteByUserId(Long userId);
 }

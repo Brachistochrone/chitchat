@@ -19,4 +19,7 @@ public interface AttachmentRepository extends JpaRepository<Attachment, Long> {
 
     @Query("SELECT a FROM Attachment a WHERE a.message.id = :messageId")
     List<Attachment> findByMessageId(@Param("messageId") Long messageId);
+
+    @Query("SELECT a FROM Attachment a WHERE a.uploader.id = :uploaderId")
+    List<Attachment> findByUploaderId(@Param("uploaderId") Long uploaderId);
 }

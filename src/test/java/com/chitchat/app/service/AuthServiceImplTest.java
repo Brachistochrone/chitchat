@@ -1,5 +1,13 @@
 package com.chitchat.app.service;
 
+import com.chitchat.app.dao.AttachmentRepository;
+import com.chitchat.app.dao.ContactRepository;
+import com.chitchat.app.dao.MessageRepository;
+import com.chitchat.app.dao.RoomBanRepository;
+import com.chitchat.app.dao.RoomMemberRepository;
+import com.chitchat.app.dao.RoomRepository;
+import com.chitchat.app.dao.UnreadCountRepository;
+import com.chitchat.app.dao.UserBanRepository;
 import com.chitchat.app.dao.UserRepository;
 import com.chitchat.app.dao.UserSessionRepository;
 import com.chitchat.app.dto.request.ChangePasswordRequest;
@@ -23,6 +31,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +46,14 @@ class AuthServiceImplTest {
 
     @Mock private UserRepository userRepository;
     @Mock private UserSessionRepository userSessionRepository;
+    @Mock private RoomRepository roomRepository;
+    @Mock private RoomMemberRepository roomMemberRepository;
+    @Mock private RoomBanRepository roomBanRepository;
+    @Mock private MessageRepository messageRepository;
+    @Mock private AttachmentRepository attachmentRepository;
+    @Mock private ContactRepository contactRepository;
+    @Mock private UserBanRepository userBanRepository;
+    @Mock private UnreadCountRepository unreadCountRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private JavaMailSender mailSender;
@@ -221,11 +238,13 @@ class AuthServiceImplTest {
     @Test
     void deleteAccount_success() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        when(attachmentRepository.findByUploaderId(1L)).thenReturn(List.of());
+        when(roomRepository.findByOwnerId(1L)).thenReturn(List.of());
+        when(roomMemberRepository.findByIdUserId(1L)).thenReturn(List.of());
+        when(userSessionRepository.findByUserIdAndRevokedFalse(1L)).thenReturn(List.of());
 
         authService.deleteAccount(1L);
 
-        assertThat(testUser.getDeletedAt()).isNotNull();
-        verify(userRepository).save(testUser);
+        verify(userRepository).delete(testUser);
     }
 }

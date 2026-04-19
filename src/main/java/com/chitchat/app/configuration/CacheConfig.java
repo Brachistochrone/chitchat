@@ -18,7 +18,9 @@ public class CacheConfig {
         CaffeineCacheManager manager = new CaffeineCacheManager(
                 "users",
                 "sessions",
-                "roomMembers"
+                "rooms",
+                "roomMembers",
+                "presence"
         );
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(5, TimeUnit.MINUTES)

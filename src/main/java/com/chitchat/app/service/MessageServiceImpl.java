@@ -3,6 +3,7 @@ package com.chitchat.app.service;
 import com.chitchat.app.dao.AttachmentRepository;
 import com.chitchat.app.dao.ContactRepository;
 import com.chitchat.app.dao.MessageRepository;
+import com.chitchat.app.dao.RoomBanRepository;
 import com.chitchat.app.dao.RoomMemberRepository;
 import com.chitchat.app.dao.UserBanRepository;
 import com.chitchat.app.dto.request.EditMessageRequest;
@@ -41,6 +42,7 @@ public class MessageServiceImpl implements MessageService {
     private final AttachmentRepository attachmentRepository;
     private final ContactRepository contactRepository;
     private final UserBanRepository userBanRepository;
+    private final RoomBanRepository roomBanRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final MessageEventProducer messageEventProducer;
     private final EntityLoaderService entityLoader;
@@ -146,6 +148,9 @@ public class MessageServiceImpl implements MessageService {
     public List<MessageResponse> getRoomMessages(Long roomId, Long requesterId,
                                                   OffsetDateTime before, int limit) {
         Room room = entityLoader.loadRoom(roomId);
+        if (roomBanRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
+            throw new ForbiddenException("You are banned from this room");
+        }
         if (room.getVisibility() == RoomVisibility.PRIVATE
                 && !roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
             throw new ForbiddenException("Access to private room denied");
