@@ -32,12 +32,26 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d chitchat"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  flyway:
+    image: flyway/flyway:11
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/chitchat
+      FLYWAY_USER: ${DB_USERNAME:-postgres}
+      FLYWAY_PASSWORD: ${DB_PASSWORD:-postgres}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: migrate
 
   app:
     build: .
@@ -48,6 +62,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      flyway:
+        condition: service_completed_successfully
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/chitchat
       DB_USERNAME: ${DB_USERNAME:-postgres}
