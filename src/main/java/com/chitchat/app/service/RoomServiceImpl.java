@@ -49,6 +49,7 @@ public class RoomServiceImpl implements RoomService {
     private final MessageRepository messageRepository;
     private final AttachmentRepository attachmentRepository;
     private final UserRepository userRepository;
+    private final EntityLoaderService entityLoader;
 
     @Override
     @Transactional(readOnly = true)
@@ -65,7 +66,7 @@ public class RoomServiceImpl implements RoomService {
         if (roomRepository.existsByName(request.getName())) {
             throw new ConflictException("Room name already taken: " + request.getName());
         }
-        User owner = loadActiveUser(ownerId);
+        User owner = entityLoader.loadActiveUser(ownerId);
         Room room = Room.builder()
                 .name(request.getName())
                 .description(request.getDescription())
@@ -90,7 +91,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public RoomResponse getRoom(Long roomId, Long requesterId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         if (room.getVisibility() == RoomVisibility.PRIVATE
                 && !roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
             throw new ForbiddenException("Access to private room denied");
@@ -101,7 +102,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public RoomResponse updateRoom(Long roomId, Long requesterId, UpdateRoomRequest request) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         requireOwner(room, requesterId);
 
         if (request.getName() != null && !request.getName().equals(room.getName())) {
@@ -124,7 +125,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void deleteRoom(Long roomId, Long requesterId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         requireOwner(room, requesterId);
 
         attachmentRepository.deleteAllByMessageRoomId(roomId);
@@ -134,7 +135,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void joinRoom(Long roomId, Long userId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         if (room.getVisibility() != RoomVisibility.PUBLIC) {
             throw new ForbiddenException("Cannot join a private room directly");
         }
@@ -144,7 +145,7 @@ public class RoomServiceImpl implements RoomService {
         if (roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, userId)) {
             return;
         }
-        User user = loadActiveUser(userId);
+        User user = entityLoader.loadActiveUser(userId);
         RoomMember member = RoomMember.builder()
                 .id(new RoomMemberId(roomId, userId))
                 .room(room)
@@ -157,7 +158,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void leaveRoom(Long roomId, Long userId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         if (room.getOwner().getId().equals(userId)) {
             throw new ForbiddenException("Owner cannot leave their own room");
         }
@@ -167,7 +168,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public List<MemberResponse> getMembers(Long roomId, Long requesterId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         if (room.getVisibility() == RoomVisibility.PRIVATE
                 && !roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
             throw new ForbiddenException("Access to private room denied");
@@ -179,7 +180,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void inviteUser(Long roomId, Long requesterId, InviteToRoomRequest request) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         requireAdminOrOwner(roomId, requesterId);
 
         User target = userRepository.findByUsername(request.getUsername())
@@ -193,7 +194,7 @@ public class RoomServiceImpl implements RoomService {
             throw new ForbiddenException("User is banned from this room");
         }
 
-        User inviter = loadActiveUser(requesterId);
+        User inviter = entityLoader.loadActiveUser(requesterId);
         RoomInvite invite = RoomInvite.builder()
                 .room(room)
                 .invitedUser(target)
@@ -216,7 +217,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void promoteAdmin(Long roomId, Long requesterId, Long targetUserId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         requireOwner(room, requesterId);
 
         RoomMember target = roomMemberRepository.findByIdRoomIdAndIdUserId(roomId, targetUserId)
@@ -230,7 +231,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void demoteAdmin(Long roomId, Long requesterId, Long targetUserId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         if (!requesterId.equals(targetUserId) && !room.getOwner().getId().equals(requesterId)) {
             throw new ForbiddenException("Only the owner or the admin themselves can demote an admin");
         }
@@ -245,7 +246,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void kickMember(Long roomId, Long requesterId, Long targetUserId) {
-        loadRoom(roomId);
+        entityLoader.loadRoom(roomId);
         RoomMember requester = requireAdminOrOwner(roomId, requesterId);
 
         RoomMember target = roomMemberRepository.findByIdRoomIdAndIdUserId(roomId, targetUserId)
@@ -262,7 +263,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public List<BanResponse> getBans(Long roomId, Long requesterId) {
-        loadRoom(roomId);
+        entityLoader.loadRoom(roomId);
         requireAdminOrOwner(roomId, requesterId);
         return roomBanRepository.findByIdRoomId(roomId).stream()
                 .map(EntityMapper::toBanResponse)
@@ -271,7 +272,7 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void banMember(Long roomId, Long requesterId, Long targetUserId) {
-        Room room = loadRoom(roomId);
+        Room room = entityLoader.loadRoom(roomId);
         RoomMember requester = requireAdminOrOwner(roomId, requesterId);
 
         if (room.getOwner().getId().equals(targetUserId)) {
@@ -285,8 +286,8 @@ public class RoomServiceImpl implements RoomService {
         });
 
         if (!roomBanRepository.existsByIdRoomIdAndIdUserId(roomId, targetUserId)) {
-            User target = loadActiveUser(targetUserId);
-            User banner = loadActiveUser(requesterId);
+            User target = entityLoader.loadActiveUser(targetUserId);
+            User banner = entityLoader.loadActiveUser(requesterId);
             RoomBan ban = RoomBan.builder()
                     .id(new RoomBanId(roomId, targetUserId))
                     .room(room)
@@ -300,24 +301,13 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public void unbanMember(Long roomId, Long requesterId, Long targetUserId) {
-        loadRoom(roomId);
+        entityLoader.loadRoom(roomId);
         requireAdminOrOwner(roomId, requesterId);
         roomBanRepository.findByIdRoomIdAndIdUserId(roomId, targetUserId)
                 .ifPresent(roomBanRepository::delete);
     }
 
     // ── Private helpers ───────────────────────────────────────────────
-
-    private Room loadRoom(Long roomId) {
-        return roomRepository.findById(roomId)
-                .orElseThrow(() -> new ResourceNotFoundException("Room not found"));
-    }
-
-    private User loadActiveUser(Long userId) {
-        return userRepository.findById(userId)
-                .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-    }
 
     private void requireOwner(Room room, Long requesterId) {
         if (!room.getOwner().getId().equals(requesterId)) {

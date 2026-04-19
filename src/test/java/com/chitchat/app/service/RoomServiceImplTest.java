@@ -55,6 +55,7 @@ class RoomServiceImplTest {
     @Mock private MessageRepository messageRepository;
     @Mock private AttachmentRepository attachmentRepository;
     @Mock private UserRepository userRepository;
+    @Mock private EntityLoaderService entityLoader;
 
     @InjectMocks
     private RoomServiceImpl roomService;
@@ -103,7 +104,7 @@ class RoomServiceImplTest {
         request.setVisibility(RoomVisibility.PUBLIC);
 
         when(roomRepository.existsByName("New Room")).thenReturn(false);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(entityLoader.loadActiveUser(1L)).thenReturn(owner);
         when(roomRepository.save(any(Room.class))).thenAnswer(i -> {
             Room r = i.getArgument(0);
             r.setId(10L);
@@ -134,7 +135,7 @@ class RoomServiceImplTest {
 
     @Test
     void getRoom_publicRoom_anyUserCanView() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.countByIdRoomId(10L)).thenReturn(3);
 
         RoomResponse response = roomService.getRoom(10L, 4L);
@@ -145,7 +146,7 @@ class RoomServiceImplTest {
 
     @Test
     void getRoom_privateRoom_nonMember_throwsForbidden() {
-        when(roomRepository.findById(11L)).thenReturn(Optional.of(privateRoom));
+        when(entityLoader.loadRoom(11L)).thenReturn(privateRoom);
         when(roomMemberRepository.existsByIdRoomIdAndIdUserId(11L, 4L)).thenReturn(false);
 
         assertThatThrownBy(() -> roomService.getRoom(11L, 4L))
@@ -154,7 +155,7 @@ class RoomServiceImplTest {
 
     @Test
     void getRoom_notFound_throwsResourceNotFound() {
-        when(roomRepository.findById(99L)).thenReturn(Optional.empty());
+        when(entityLoader.loadRoom(99L)).thenThrow(new ResourceNotFoundException("Room not found"));
 
         assertThatThrownBy(() -> roomService.getRoom(99L, 1L))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -167,7 +168,7 @@ class RoomServiceImplTest {
         UpdateRoomRequest request = new UpdateRoomRequest();
         request.setName("Updated Room");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomRepository.existsByName("Updated Room")).thenReturn(false);
         when(roomRepository.save(any(Room.class))).thenAnswer(i -> i.getArgument(0));
         when(roomMemberRepository.countByIdRoomId(10L)).thenReturn(2);
@@ -182,7 +183,7 @@ class RoomServiceImplTest {
         UpdateRoomRequest request = new UpdateRoomRequest();
         request.setName("Updated Room");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         assertThatThrownBy(() -> roomService.updateRoom(10L, 2L, request))
                 .isInstanceOf(ForbiddenException.class);
@@ -193,7 +194,7 @@ class RoomServiceImplTest {
         UpdateRoomRequest request = new UpdateRoomRequest();
         request.setName("Taken Room");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomRepository.existsByName("Taken Room")).thenReturn(true);
 
         assertThatThrownBy(() -> roomService.updateRoom(10L, 1L, request))
@@ -204,7 +205,7 @@ class RoomServiceImplTest {
 
     @Test
     void deleteRoom_success_cascadesMembers() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         roomService.deleteRoom(10L, 1L);
 
@@ -215,7 +216,7 @@ class RoomServiceImplTest {
 
     @Test
     void deleteRoom_notOwner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         assertThatThrownBy(() -> roomService.deleteRoom(10L, 2L))
                 .isInstanceOf(ForbiddenException.class);
@@ -226,10 +227,10 @@ class RoomServiceImplTest {
 
     @Test
     void joinRoom_success_publicRoom() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomBanRepository.existsByIdRoomIdAndIdUserId(10L, 4L)).thenReturn(false);
         when(roomMemberRepository.existsByIdRoomIdAndIdUserId(10L, 4L)).thenReturn(false);
-        when(userRepository.findById(4L)).thenReturn(Optional.of(outsider));
+        when(entityLoader.loadActiveUser(4L)).thenReturn(outsider);
         when(roomMemberRepository.save(any(RoomMember.class))).thenAnswer(i -> i.getArgument(0));
 
         roomService.joinRoom(10L, 4L);
@@ -239,7 +240,7 @@ class RoomServiceImplTest {
 
     @Test
     void joinRoom_privateRoom_throwsForbidden() {
-        when(roomRepository.findById(11L)).thenReturn(Optional.of(privateRoom));
+        when(entityLoader.loadRoom(11L)).thenReturn(privateRoom);
 
         assertThatThrownBy(() -> roomService.joinRoom(11L, 4L))
                 .isInstanceOf(ForbiddenException.class);
@@ -247,7 +248,7 @@ class RoomServiceImplTest {
 
     @Test
     void joinRoom_bannedUser_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomBanRepository.existsByIdRoomIdAndIdUserId(10L, 4L)).thenReturn(true);
 
         assertThatThrownBy(() -> roomService.joinRoom(10L, 4L))
@@ -258,7 +259,7 @@ class RoomServiceImplTest {
 
     @Test
     void leaveRoom_success() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         roomService.leaveRoom(10L, 3L);
 
@@ -267,7 +268,7 @@ class RoomServiceImplTest {
 
     @Test
     void leaveRoom_owner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         assertThatThrownBy(() -> roomService.leaveRoom(10L, 1L))
                 .isInstanceOf(ForbiddenException.class);
@@ -277,7 +278,7 @@ class RoomServiceImplTest {
 
     @Test
     void promoteAdmin_success_ownerOnly() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 3L))
                 .thenReturn(Optional.of(regularMember));
         when(roomMemberRepository.save(any(RoomMember.class))).thenAnswer(i -> i.getArgument(0));
@@ -289,7 +290,7 @@ class RoomServiceImplTest {
 
     @Test
     void promoteAdmin_notOwner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
 
         assertThatThrownBy(() -> roomService.promoteAdmin(10L, 2L, 3L))
                 .isInstanceOf(ForbiddenException.class);
@@ -299,7 +300,7 @@ class RoomServiceImplTest {
 
     @Test
     void demoteAdmin_byOwner_success() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.save(any(RoomMember.class))).thenAnswer(i -> i.getArgument(0));
@@ -311,7 +312,7 @@ class RoomServiceImplTest {
 
     @Test
     void demoteAdmin_selfDemotion_success() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.save(any(RoomMember.class))).thenAnswer(i -> i.getArgument(0));
@@ -323,7 +324,7 @@ class RoomServiceImplTest {
 
     @Test
     void demoteAdmin_targetIsOwner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 1L))
                 .thenReturn(Optional.of(ownerMember));
 
@@ -335,7 +336,7 @@ class RoomServiceImplTest {
 
     @Test
     void kickMember_byAdmin_success() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 3L))
@@ -348,7 +349,7 @@ class RoomServiceImplTest {
 
     @Test
     void kickMember_targetIsOwner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 1L))
@@ -365,7 +366,7 @@ class RoomServiceImplTest {
                 .user(User.builder().id(5L).username("eve").build())
                 .role(RoomRole.ADMIN).joinedAt(OffsetDateTime.now()).build();
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 5L))
@@ -379,14 +380,14 @@ class RoomServiceImplTest {
 
     @Test
     void banMember_success_removesFromMembers() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 3L))
                 .thenReturn(Optional.of(regularMember));
         when(roomBanRepository.existsByIdRoomIdAndIdUserId(10L, 3L)).thenReturn(false);
-        when(userRepository.findById(3L)).thenReturn(Optional.of(member));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(admin));
+        when(entityLoader.loadActiveUser(3L)).thenReturn(member);
+        when(entityLoader.loadActiveUser(2L)).thenReturn(admin);
         when(roomBanRepository.save(any(RoomBan.class))).thenAnswer(i -> i.getArgument(0));
 
         roomService.banMember(10L, 2L, 3L);
@@ -397,7 +398,7 @@ class RoomServiceImplTest {
 
     @Test
     void banMember_targetIsOwner_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
 
@@ -413,7 +414,7 @@ class RoomServiceImplTest {
                 .id(new RoomBanId(10L, 4L)).room(publicRoom).user(outsider)
                 .bannedBy(admin).bannedAt(OffsetDateTime.now()).build();
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomBanRepository.findByIdRoomIdAndIdUserId(10L, 4L))
@@ -431,13 +432,13 @@ class RoomServiceImplTest {
         InviteToRoomRequest request = new InviteToRoomRequest();
         request.setUsername("dave");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(userRepository.findByUsername("dave")).thenReturn(Optional.of(outsider));
         when(roomMemberRepository.existsByIdRoomIdAndIdUserId(10L, 4L)).thenReturn(false);
         when(roomBanRepository.existsByIdRoomIdAndIdUserId(10L, 4L)).thenReturn(false);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(admin));
+        when(entityLoader.loadActiveUser(2L)).thenReturn(admin);
         when(roomInviteRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(roomMemberRepository.save(any(RoomMember.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -452,7 +453,7 @@ class RoomServiceImplTest {
         InviteToRoomRequest request = new InviteToRoomRequest();
         request.setUsername("charlie");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(userRepository.findByUsername("charlie")).thenReturn(Optional.of(member));
@@ -467,7 +468,7 @@ class RoomServiceImplTest {
         InviteToRoomRequest request = new InviteToRoomRequest();
         request.setUsername("dave");
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(userRepository.findByUsername("dave")).thenReturn(Optional.of(outsider));
@@ -486,7 +487,7 @@ class RoomServiceImplTest {
                 .id(new RoomBanId(10L, 4L)).room(publicRoom).user(outsider)
                 .bannedBy(admin).bannedAt(OffsetDateTime.now()).build();
 
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 2L))
                 .thenReturn(Optional.of(adminMember));
         when(roomBanRepository.findByIdRoomId(10L)).thenReturn(List.of(ban));
@@ -499,7 +500,7 @@ class RoomServiceImplTest {
 
     @Test
     void getBans_byNonAdmin_throwsForbidden() {
-        when(roomRepository.findById(10L)).thenReturn(Optional.of(publicRoom));
+        when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
         when(roomMemberRepository.findByIdRoomIdAndIdUserId(10L, 3L))
                 .thenReturn(Optional.of(regularMember));
 
