@@ -7,4 +7,10 @@ export const usersApi = {
 
   updateProfile: (displayName: string) =>
     client.put<User>('/users/me', { displayName }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    client.put('/users/me/password', { currentPassword, newPassword }),
+
+  deleteAccount: () =>
+    client.delete('/users/me'),
 };

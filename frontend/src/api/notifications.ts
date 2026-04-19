@@ -7,4 +7,7 @@ export const notificationsApi = {
 
   markRoomRead: (roomId: number) =>
     client.post(`/rooms/${roomId}/messages/read`),
+
+  markPersonalRead: (userId: number) =>
+    client.post(`/chats/${userId}/messages/read`),
 };

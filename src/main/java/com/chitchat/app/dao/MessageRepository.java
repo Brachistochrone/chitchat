@@ -21,7 +21,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     void deleteAllBySenderId(@Param("senderId") Long senderId);
 
     @Query("SELECT m FROM Message m WHERE m.room.id = :roomId AND m.deletedAt IS NULL " +
-           "AND (:before IS NULL OR m.createdAt < :before) ORDER BY m.createdAt DESC")
+           "AND m.createdAt < :before ORDER BY m.createdAt DESC")
     List<Message> findRoomMessages(@Param("roomId") Long roomId,
                                    @Param("before") OffsetDateTime before,
                                    Pageable pageable);
@@ -30,7 +30,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
            "AND m.deletedAt IS NULL " +
            "AND ((m.sender.id = :userId1 AND m.recipient.id = :userId2) " +
            "  OR (m.sender.id = :userId2 AND m.recipient.id = :userId1)) " +
-           "AND (:before IS NULL OR m.createdAt < :before) ORDER BY m.createdAt DESC")
+           "AND m.createdAt < :before ORDER BY m.createdAt DESC")
     List<Message> findPersonalMessages(@Param("userId1") Long userId1,
                                        @Param("userId2") Long userId2,
                                        @Param("before") OffsetDateTime before,
