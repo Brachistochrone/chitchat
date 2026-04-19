@@ -67,3 +67,28 @@ export interface UnreadCount {
   chatUserId: number | null;
   count: number;
 }
+
+export interface ChatMessageEvent {
+  messageId: number;
+  chatType: 'ROOM' | 'PERSONAL';
+  roomId: number | null;
+  senderId: number;
+  recipientId: number | null;
+  content: string | null;
+  replyToId: number | null;
+  attachmentIds: number[];
+  eventType: 'CREATED' | 'EDITED' | 'DELETED';
+  createdAt: string;
+}
+
+export interface PresenceUpdate {
+  userId: number;
+  username: string;
+  status: 'ONLINE' | 'AFK' | 'OFFLINE';
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+}
