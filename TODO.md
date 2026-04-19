@@ -1,197 +1,214 @@
-# TODO — Milestone 6: GraphQL, Polish & Packaging
+# TODO — Milestone 7: Project Setup, Auth & Layout Shell
 
 ---
 
-## 1. GraphQL Schema (`src/main/resources/graphql/schema.graphqls`)
+## 1. Project Scaffolding
 
-- [x] Create `src/main/resources/graphql/` directory
-- [x] Define full schema file with:
-  - Scalars: `DateTime`
-  - Enums: `RoomVisibility`, `RoomRole`, `PresenceStatus`, `ContactStatus`, `ChatType`, `EventType`
-  - Types: `User`, `Room`, `RoomMember`, `Message`, `Attachment`, `Contact`, `Session`, `AuthPayload`, `MessagePage`, `RoomPage`
-  - Subscription event types: `MessageEvent`, `PresenceEvent`, `NotificationEvent`
-  - All Queries (§7 spec): `me`, `user`, `mySessions`, `rooms`, `room`, `roomMembers`, `roomBans`, `roomMessages`, `personalMessages`, `contacts`, `pendingRequests`
-  - All Mutations (§7 spec): auth (7), sessions (1), rooms (10), messages (4), contacts (6)
-  - All Subscriptions (§7 spec): `roomMessages`, `personalMessages`, `roomPresence`, `notifications`
+### Vite + React + TypeScript
+- [x] Run `npm create vite@latest frontend -- --template react-ts` from project root
+- [x] Verify `frontend/` directory structure: `src/`, `public/`, `index.html`, `vite.config.ts`, `tsconfig.json`
 
----
+### Install dependencies
+- [x] Core: `react-router-dom`, `zustand`, `axios`
+- [x] Styling: `tailwindcss @tailwindcss/vite` (Tailwind v4 Vite plugin)
+- [x] Icons: `lucide-react`
+- [x] Toasts: `react-hot-toast`
+- [x] Date: `date-fns`
 
-## 2. GraphQL Configuration
+### Tailwind CSS setup
+- [x] Add `@tailwindcss/vite` plugin to `vite.config.ts`
+- [x] Add `@import "tailwindcss"` to `src/index.css`
+- [x] Verify Tailwind classes render correctly
 
-### `application.properties` additions
-- [x] `spring.graphql.graphiql.enabled=true` — enable GraphiQL playground
-- [x] `spring.graphql.websocket.path=/graphql` — WebSocket transport for subscriptions
-- [x] `spring.graphql.schema.printer.enabled=true` — introspection
+### Vite dev proxy
+- [x] In `vite.config.ts`, configure proxy: `/api` → `http://localhost:8080`, `/ws` → `http://localhost:8080` (WebSocket upgrade)
 
-### DateTime scalar configuration (`graphql/config/ScalarConfig.java`)
-- [x] Register `ExtendedScalars.DateTime` from `graphql-java-extended-scalars` library
-- [x] Add `graphql-java-extended-scalars` dependency to `pom.xml`
-- [x] `@Bean RuntimeWiringConfigurer` to register the scalar
+### .gitignore
+- [x] Add `frontend/node_modules/`, `frontend/dist/` to project `.gitignore`
 
 ---
 
-## 3. Query Resolvers (`graphql/query/`)
+## 2. Project Structure (`frontend/src/`)
 
-### `UserQueryResolver.java`
-- [x] `@QueryMapping User me()` → delegates to `UserService.getMe`
-- [x] `@QueryMapping User user(String username)` → delegates to `UserService.getUserByUsername`
-
-### `SessionQueryResolver.java`
-- [x] `@QueryMapping List<Session> mySessions()` → delegates to `SessionService.getActiveSessions`
-
-### `RoomQueryResolver.java`
-- [x] `@QueryMapping RoomPage rooms(String query, Integer page, Integer size)` → delegates to `RoomService.searchPublicRooms`
-- [x] `@QueryMapping Room room(Long id)` → delegates to `RoomService.getRoom`
-- [x] `@QueryMapping List<RoomMember> roomMembers(Long roomId)` → delegates to `RoomService.getMembers`
-- [x] `@QueryMapping List<BanResponse> roomBans(Long roomId)` → delegates to `RoomService.getBans`
-
-### `MessageQueryResolver.java`
-- [x] `@QueryMapping MessagePage roomMessages(Long roomId, String before, Integer limit)` → delegates to `MessageService.getRoomMessages`; wraps result in `MessagePage` with `nextCursor`
-- [x] `@QueryMapping MessagePage personalMessages(Long userId, String before, Integer limit)` → delegates to `MessageService.getPersonalMessages`; wraps result in `MessagePage`
-
-### `ContactQueryResolver.java`
-- [x] `@QueryMapping List<Contact> contacts()` → delegates to `ContactService.getFriends`
-- [x] `@QueryMapping List<Contact> pendingRequests()` → delegates to `ContactService.getIncomingRequests`
+### Directory layout
+- [x] Create directory structure:
+  ```
+  src/
+  ├── api/           # Axios instance + API functions
+  ├── components/    # Reusable UI components
+  │   ├── auth/      # Login, Register, ForgotPassword modals
+  │   ├── layout/    # TopNav, Sidebar, RightPanel, MainLayout
+  │   └── ui/        # Button, Modal, Input, etc.
+  ├── pages/         # Route-level components
+  ├── stores/        # Zustand stores
+  ├── types/         # TypeScript interfaces
+  ├── hooks/         # Custom React hooks
+  └── utils/         # Helper functions
+  ```
 
 ---
 
-## 4. Mutation Resolvers (`graphql/mutation/`)
+## 3. TypeScript Types (`src/types/`)
 
-### `AuthMutationResolver.java`
-- [x] `@MutationMapping AuthPayload register(String email, String password, String username)` → `AuthService.register`
-- [x] `@MutationMapping AuthPayload login(String email, String password)` → `AuthService.login`
-- [x] `@MutationMapping Boolean logout()` → `AuthService.logout`
-- [x] `@MutationMapping Boolean requestPasswordReset(String email)` → `AuthService.requestPasswordReset`
-- [x] `@MutationMapping Boolean confirmPasswordReset(String token, String newPassword)` → `AuthService.confirmPasswordReset`
-- [x] `@MutationMapping Boolean changePassword(String currentPassword, String newPassword)` → `AuthService.changePassword`
-- [x] `@MutationMapping Boolean deleteAccount()` → `AuthService.deleteAccount`
-
-### `RoomMutationResolver.java`
-- [x] `@MutationMapping Room createRoom(...)` → `RoomService.createRoom`
-- [x] `@MutationMapping Room updateRoom(...)` → `RoomService.updateRoom`
-- [x] `@MutationMapping Boolean deleteRoom(Long id)` → `RoomService.deleteRoom`
-- [x] `@MutationMapping Boolean joinRoom(Long id)` → `RoomService.joinRoom`
-- [x] `@MutationMapping Boolean leaveRoom(Long id)` → `RoomService.leaveRoom`
-- [x] `@MutationMapping Boolean inviteToRoom(Long roomId, String username)` → `RoomService.inviteUser`
-- [x] `@MutationMapping Boolean promoteAdmin(Long roomId, Long userId)` → `RoomService.promoteAdmin`
-- [x] `@MutationMapping Boolean demoteAdmin(Long roomId, Long userId)` → `RoomService.demoteAdmin`
-- [x] `@MutationMapping Boolean kickMember(Long roomId, Long userId)` → `RoomService.kickMember`
-- [x] `@MutationMapping Boolean banFromRoom(Long roomId, Long userId)` → `RoomService.banMember`
-- [x] `@MutationMapping Boolean unbanFromRoom(Long roomId, Long userId)` → `RoomService.unbanMember`
-
-### `MessageMutationResolver.java`
-- [x] `@MutationMapping Message sendRoomMessage(Long roomId, String content, Long replyToId, List<Long> attachmentIds)` → `MessageService.sendRoomMessage`
-- [x] `@MutationMapping Message sendPersonalMessage(Long userId, String content, Long replyToId, List<Long> attachmentIds)` → `MessageService.sendPersonalMessage`
-- [x] `@MutationMapping Message editMessage(Long id, String content)` → `MessageService.editMessage`
-- [x] `@MutationMapping Boolean deleteMessage(Long id)` → `MessageService.deleteMessage`
-
-### `ContactMutationResolver.java`
-- [x] `@MutationMapping Contact sendFriendRequest(String username, String message)` → `ContactService.sendFriendRequest`
-- [x] `@MutationMapping Contact acceptFriendRequest(Long requestId)` → `ContactService.acceptFriendRequest`
-- [x] `@MutationMapping Boolean declineFriendRequest(Long requestId)` → `ContactService.declineFriendRequest`
-- [x] `@MutationMapping Boolean removeFriend(Long userId)` → `ContactService.removeFriend`
-- [x] `@MutationMapping Boolean banUser(Long userId)` → `ContactService.banUser`
-- [x] `@MutationMapping Boolean unbanUser(Long userId)` → `ContactService.unbanUser`
+### `api.ts`
+- [x] `User`: `id`, `username`, `displayName`, `createdAt`
+- [x] `AuthResponse`: `token`, `user: User`
+- [x] `Room`: `id`, `name`, `description`, `visibility`, `owner: User`, `memberCount`, `createdAt`
+- [x] `Message`: `id`, `chatType`, `sender: User`, `content`, `replyTo: Message | null`, `attachments: Attachment[]`, `editedAt`, `createdAt`
+- [x] `Attachment`: `id`, `originalFilename`, `fileSize`, `mimeType`, `comment`, `downloadUrl`
+- [x] `Session`: `id`, `browser`, `ipAddress`, `lastSeenAt`, `current`
+- [x] `Contact`: `id`, `user: User`, `status`, `message`, `createdAt`
+- [x] `MemberResponse`: `user: User`, `role`, `joinedAt`
+- [x] `UnreadCount`: `roomId`, `chatUserId`, `count`
 
 ---
 
-## 5. Subscription Resolvers (`graphql/subscription/`)
+## 4. API Layer (`src/api/`)
 
-### `MessageSubscriptionResolver.java`
-- [x] `@SubscriptionMapping Flux<MessageEvent> roomMessages(Long roomId)` — subscribe to room messages via `SimpMessagingTemplate` or a reactive `Sinks.Many<>`; backed by the Kafka consumer that fans out to WebSocket
-- [x] `@SubscriptionMapping Flux<MessageEvent> personalMessages()` — subscribe to personal messages for the authenticated user
+### Axios instance (`src/api/client.ts`)
+- [x] Create Axios instance with `baseURL: '/api'`
+- [x] Request interceptor: attach `Authorization: Bearer <token>` from `useAuthStore`
+- [x] Response interceptor: on 401, clear token + redirect to `/`
 
-### `PresenceSubscriptionResolver.java`
-- [x] `@SubscriptionMapping Flux<PresenceEvent> roomPresence(Long roomId)` — subscribe to presence changes for members of a room
+### Auth API (`src/api/auth.ts`)
+- [x] `register(email, password, username)` → `POST /auth/register` → `AuthResponse`
+- [x] `login(email, password)` → `POST /auth/login` → `AuthResponse`
+- [x] `logout()` → `POST /auth/logout`
+- [x] `requestPasswordReset(email)` → `POST /auth/password-reset/request`
+- [x] `confirmPasswordReset(token, newPassword)` → `POST /auth/password-reset/confirm`
 
-### `NotificationSubscriptionResolver.java`
-- [x] `@SubscriptionMapping Flux<NotificationEvent> notifications()` — subscribe to notifications for the authenticated user
-
-### Subscription infrastructure
-- [x] Create `graphql/subscription/SubscriptionPublisher.java` — holds `Sinks.Many<>` per topic (room messages, personal messages, presence, notifications); consumers publish to sinks, subscription resolvers subscribe from sinks
-- [x] Update Kafka consumers (`MessageEventConsumer`, `PresenceStateConsumer`, `NotificationConsumer`) to also publish to `SubscriptionPublisher` sinks
-
----
-
-## 6. GraphQL Security
-
-- [x] Add `@Controller` annotation to all resolver classes (Spring GraphQL uses `@Controller` pattern)
-- [x] Use `SecurityUtil.getCurrentUserId()` in resolvers for authenticated user context
-- [x] Auth mutations (register, login, requestPasswordReset, confirmPasswordReset) should work without authentication — configure in `SecurityConfig`
-- [x] Add `/graphql` and `/graphiql` paths to `SecurityConfig` permitAll (for GraphiQL playground)
-
-### `SecurityConfig.java` updates
-- [x] Add `"/graphql"`, `"/graphiql"` to permitted paths (GraphQL endpoint handles its own auth via resolvers)
-
-### `AppConstants.java` updates
-- [x] Add `GRAPHQL_PATH = "/graphql"` and `GRAPHIQL_PATH = "/graphiql"` constants
+### User API (`src/api/users.ts`)
+- [x] `getMe()` → `GET /users/me` → `User`
+- [x] `updateProfile(displayName)` → `PUT /users/me` → `User`
 
 ---
 
-## 7. DTO Additions for GraphQL
+## 5. Zustand Stores (`src/stores/`)
 
-### `dto/response/MessagePage.java`
-- [x] `items` (`List<MessageResponse>`), `nextCursor` (`String`)
+### `useAuthStore.ts`
+- [x] State: `token: string | null`, `user: User | null`, `isAuthenticated: boolean`
+- [x] Actions: `setAuth(token, user)`, `clearAuth()`, `loadFromStorage()`
+- [x] Persist token in `localStorage`
+- [x] On init: check `localStorage` for existing token → set `isAuthenticated`
 
-### `dto/response/RoomPage.java`
-- [x] `items` (`List<RoomResponse>`), `totalCount` (`int`)
+### `useRoomStore.ts` (scaffold only)
+- [x] State: `rooms: Room[]`, `selectedRoomId: number | null`
+- [x] Actions: `setRooms(rooms)`, `selectRoom(id)` — placeholders for M8
 
----
-
-## 8. README.md
-
-- [x] Create `README.md` at project root with:
-  - Project description
-  - Tech stack summary
-  - Prerequisites (Java 21, Docker, Maven)
-  - Build: `mvn clean package`
-  - Run: `docker compose up --build`
-  - REST API: `http://localhost:8080/swagger-ui.html`
-  - GraphQL: `http://localhost:8080/graphiql`
-  - Test: `mvn test`
-  - Project structure overview
-  - Environment variables table
+### `useMessageStore.ts` (scaffold only)
+- [x] State: `messages: Message[]`, `loading: boolean`
+- [x] Actions: `setMessages(msgs)`, `addMessage(msg)` — placeholders for M8
 
 ---
 
-## 9. Docker Polish
+## 6. Routing (`src/App.tsx`)
 
-### Verify `Dockerfile`
-- [x] Multi-stage build already in place ✓
-- [x] Alpine runtime with `libstdc++` ✓
-
-### Verify `docker-compose.yml`
-- [x] Health checks on postgres ✓
-- [x] Flyway runs before app ✓
-- [x] Kafka topic auto-creation ✓
-- [x] Ensure `app` container exposes all needed ports
+### React Router setup
+- [x] Routes:
+  - `/` → `LandingPage`
+  - `/chat` → `ChatPage` (protected)
+  - `*` → redirect to `/`
+- [x] `ProtectedRoute` wrapper component: if `!isAuthenticated` → redirect to `/`
 
 ---
 
-## 10. Smoke Test Checklist (End-to-End)
+## 7. Landing Page (`src/pages/LandingPage.tsx`)
 
-### REST API flow
-- [x] `POST /api/auth/register` → 201, user created
-- [x] `POST /api/auth/login` → 200, JWT received
-- [x] `POST /api/rooms` → 201, room created
-- [x] `POST /api/rooms/{roomId}/messages` → 201, message sent
-- [x] `POST /api/attachments` → 201, file uploaded
-- [x] `GET /api/attachments/{id}` → 200, file downloaded
-- [x] `GET /swagger-ui.html` → Swagger UI renders
+- [x] Centered layout with app logo/name "Chitchat"
+- [x] Two buttons: "Sign In" and "Register"
+- [x] Clicking either opens the respective auth modal
+- [x] If already authenticated (token in localStorage) → redirect to `/chat`
 
-### GraphQL flow
-- [x] `mutation { register(...) }` → AuthPayload returned
-- [x] `mutation { login(...) }` → token received
-- [x] `query { me { username } }` → current user
-- [x] `mutation { createRoom(...) }` → room created
-- [x] `mutation { sendRoomMessage(...) }` → message sent
-- [x] `query { roomMessages(roomId: ...) }` → message list
-- [x] `subscription { roomMessages(roomId: ...) }` → real-time message received
-- [x] `query { contacts }` → friend list
-- [x] `GET /graphiql` → GraphiQL playground renders
+---
 
-### Docker flow
-- [x] `docker compose up --build` → all services start
-- [x] `docker compose logs flyway` → migrations applied
-- [x] App connects to DB and Kafka without errors
-- [x] `mvn test` — all tests pass
+## 8. Auth Modals (`src/components/auth/`)
+
+### Reusable Modal component (`src/components/ui/Modal.tsx`)
+- [x] Overlay backdrop (semi-transparent dark)
+- [x] Centered white card with close button
+- [x] Props: `isOpen`, `onClose`, `title`, `children`
+- [x] Close on backdrop click and Escape key
+
+### LoginModal (`src/components/auth/LoginModal.tsx`)
+- [x] Fields: email (text input), password (password input)
+- [x] "Sign In" button → calls `auth.login()` → on success: `setAuth(token, user)`, redirect to `/chat`
+- [x] "Forgot password?" link → switches to `ForgotPasswordModal`
+- [x] Inline error display on failed login
+- [x] Loading state on submit button
+
+### RegisterModal (`src/components/auth/RegisterModal.tsx`)
+- [x] Fields: email, username, password, confirm password
+- [x] Client-side validation: all fields required, passwords must match
+- [x] "Create Account" button → calls `auth.register()` → on success: `setAuth(token, user)`, redirect to `/chat`
+- [x] Inline error display on failed registration (duplicate email/username)
+
+### ForgotPasswordModal (`src/components/auth/ForgotPasswordModal.tsx`)
+- [x] Field: email
+- [x] "Send Reset Link" button → calls `auth.requestPasswordReset()`
+- [x] Success message: "Check your email for a reset link"
+
+---
+
+## 9. Chat Layout Shell (`src/pages/ChatPage.tsx` + `src/components/layout/`)
+
+### TopNav (`src/components/layout/TopNav.tsx`)
+- [x] Fixed top bar with:
+  - Logo/app name (left)
+  - Navigation items: "Public Rooms", "Private Rooms", "Contacts", "Sessions" (center/left)
+  - User dropdown (right): display name, "Profile", "Sign out"
+- [x] "Sign out" → calls `auth.logout()` → `clearAuth()` → redirect to `/`
+- [x] Styled with Tailwind: dark background, white text, hover states
+
+### Sidebar (`src/components/layout/Sidebar.tsx`)
+- [x] Left column (~250px width)
+- [x] Placeholder content: "Rooms will appear here" / "Contacts will appear here"
+- [x] "Create Room" button at bottom (placeholder, non-functional in M7)
+
+### ChatArea (`src/components/layout/ChatArea.tsx`)
+- [x] Center column (flex-grow)
+- [x] Default state: centered welcome message "Select a room or contact to start chatting"
+- [x] Placeholder for message list and input bar
+
+### RightPanel (`src/components/layout/RightPanel.tsx`)
+- [x] Right column (~280px width)
+- [x] Placeholder content: "Room info and members will appear here"
+
+### ChatPage layout
+- [x] Composes: `TopNav` (fixed top) + 3-column grid (`Sidebar` | `ChatArea` | `RightPanel`)
+- [x] Full viewport height (`h-screen`), no page scroll
+- [x] Columns use `flex` layout: sidebar fixed width, chat area grows, right panel fixed width
+
+---
+
+## 10. Input Components (`src/components/ui/`)
+
+### Button (`src/components/ui/Button.tsx`)
+- [x] Props: `variant` (`primary`, `secondary`, `danger`, `ghost`), `size` (`sm`, `md`, `lg`), `loading`, `disabled`, `children`, `onClick`
+- [x] Tailwind-styled with hover/focus states
+
+### Input (`src/components/ui/Input.tsx`)
+- [x] Props: `label`, `type`, `placeholder`, `value`, `onChange`, `error`
+- [x] Label above, error message below in red
+- [x] Tailwind-styled with focus ring
+
+---
+
+## 11. Toast Notifications
+
+- [x] Add `<Toaster />` from `react-hot-toast` in `App.tsx`
+- [x] Use `toast.success()` / `toast.error()` for auth feedback (login success, registration error, etc.)
+
+---
+
+## 12. Verification
+
+- [x] `cd frontend && npm install` — installs all dependencies
+- [x] `npm run dev` — Vite dev server starts at `http://localhost:5173`
+- [x] Landing page renders with Sign In / Register buttons
+- [x] Sign In modal opens, submits login request to backend, receives JWT, redirects to `/chat`
+- [x] Register modal opens, creates account, auto-login, redirects to `/chat`
+- [x] Chat page shows 3-column layout shell with top nav
+- [x] Sign out clears token, redirects to landing page
+- [x] Refreshing `/chat` with valid token stays on chat page
+- [x] Refreshing `/chat` without token redirects to landing
+- [x] `npm run build` — production build succeeds
