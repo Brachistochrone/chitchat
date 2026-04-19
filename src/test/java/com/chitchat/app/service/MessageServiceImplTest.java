@@ -50,6 +50,7 @@ class MessageServiceImplTest {
     @Mock private RoomMemberRepository roomMemberRepository;
     @Mock private MessageEventProducer messageEventProducer;
     @Mock private EntityLoaderService entityLoader;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private MessageServiceImpl messageService;

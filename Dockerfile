@@ -9,7 +9,7 @@ RUN mvn package -DskipTests -q
 # ── Stage 2: Runtime ──────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN mkdir -p /app/uploads
+RUN apk add --no-cache libstdc++ && mkdir -p /app/uploads
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

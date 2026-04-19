@@ -1,6 +1,5 @@
 package com.chitchat.app.kafka.events;
 
-import com.chitchat.app.entity.enums.PresenceAction;
 import com.chitchat.app.entity.enums.PresenceStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,18 +7,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.OffsetDateTime;
-
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PresenceEvent {
+public class PresenceStateEvent {
 
     private Long userId;
     private String username;
     private PresenceStatus status;
-    private PresenceAction action;
-    private OffsetDateTime timestamp;
+    private int tabCount;
+    private long lastHeartbeatMs;
 }

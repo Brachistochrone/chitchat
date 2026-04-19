@@ -44,6 +44,7 @@ public class MessageServiceImpl implements MessageService {
     private final RoomMemberRepository roomMemberRepository;
     private final MessageEventProducer messageEventProducer;
     private final EntityLoaderService entityLoader;
+    private final NotificationService notificationService;
 
     @Override
     public MessageResponse sendRoomMessage(Long roomId, Long senderId, SendMessageRequest request) {
@@ -65,6 +66,7 @@ public class MessageServiceImpl implements MessageService {
         messageRepository.save(message);
 
         messageEventProducer.send(EntityMapper.toChatMessageEvent(message, MessageEventType.CREATED));
+        notificationService.incrementRoomUnread(roomId, senderId);
         return EntityMapper.toMessageResponse(message, List.of());
     }
 
@@ -95,6 +97,7 @@ public class MessageServiceImpl implements MessageService {
         messageRepository.save(message);
 
         messageEventProducer.send(EntityMapper.toChatMessageEvent(message, MessageEventType.CREATED));
+        notificationService.incrementPersonalUnread(recipientId, senderId);
         return EntityMapper.toMessageResponse(message, List.of());
     }
 

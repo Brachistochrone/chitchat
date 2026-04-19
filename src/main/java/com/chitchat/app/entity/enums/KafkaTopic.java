@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 public enum KafkaTopic {
 
     CHAT_MESSAGES("chat.messages"),
-    PRESENCE_EVENTS("presence.events");
+    PRESENCE_EVENTS("presence.events"),
+    PRESENCE_STATE("presence.state"),
+    NOTIFICATIONS("notifications");
 
     private final String topicName;
 }
