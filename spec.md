@@ -712,3 +712,184 @@ type Subscription {
 - `Dockerfile` (multi-stage: build → runtime); `docker-compose.yml` with health checks.
 - End-to-end smoke tests: register → login → create room → send message → receive via subscription → upload file → download file.
 - `README.md` with build, run, and test instructions.
+
+---
+
+## 9. Frontend — UI Specification
+
+### 9.1 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | React 19 |
+| Build tool | Vite |
+| Language | TypeScript |
+| Routing | React Router v7 |
+| State management | Zustand |
+| HTTP client | Axios (REST API) |
+| WebSocket | STOMP.js + SockJS |
+| Styling | Tailwind CSS |
+| Icons | Lucide React |
+| Emoji picker | emoji-mart |
+| Infinite scroll | react-virtuoso |
+| Notifications | react-hot-toast |
+| Date formatting | date-fns |
+
+**Project location**: `frontend/` directory at the repository root.
+**Dev server**: Vite at `http://localhost:5173`, proxied to backend at `http://localhost:8080`.
+**Production build**: `npm run build` → output to `frontend/dist/` → served by Spring Boot from `src/main/resources/static/` or via nginx.
+
+### 9.2 General Layout
+
+The application uses a **3-column layout** with a fixed top navigation bar and a bottom input area:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Logo   Public Rooms  Private Rooms  Contacts  Sessions  │  ← Top Nav
+│                                         Profile  Sign out │
+├──────────┬───────────────────────────┬───────────────────┤
+│          │                           │                   │
+│  Rooms   │                           │   Room Info       │
+│  list    │     Message Area          │   Members list    │
+│          │                           │   (with presence) │
+│ Contacts │                           │                   │
+│  list    │                           │   [Invite]        │
+│          │                           │   [Manage Room]   │
+│ [Create] │                           │                   │
+├──────────┼───────────────────────────┼───────────────────┤
+│          │ 😀 📎  Reply ▸ username   │                   │
+│          │ ┌─────────────────┐ Send  │                   │  ← Input Bar
+│          │ │ Type a message… │       │                   │
+│          │ └─────────────────┘       │                   │
+└──────────┴───────────────────────────┴───────────────────┘
+```
+
+- **Left sidebar** (collapsible): search box, rooms list (public + private, grouped), contacts list with online status dots, "Create room" button.
+- **Center**: room/chat header with name and description, chronological message list with infinite scroll, message input bar with emoji picker, file attach, reply indicator.
+- **Right panel**: room info (type, owner), member list with presence indicators (green/yellow/gray dots for online/AFK/offline), "Invite user" and "Manage room" buttons.
+
+### 9.3 Pages & Views
+
+#### 9.3.1 Landing Page
+- Centered logo with "Sign in" and "Register" buttons.
+- No sidebar or navigation.
+
+#### 9.3.2 Auth Dialogs (modal overlays)
+- **Sign In**: email, password, "Keep me signed in" checkbox, "Forgot password?" link.
+- **Register**: email, username, password, confirm password.
+- **Forgot Password**: email input, "Send reset link" button.
+- All dialogs show inline validation errors.
+
+#### 9.3.3 Main Chat View
+- Displayed after successful login.
+- Default state: no room/contact selected → center area shows a welcome message.
+- Selecting a room or contact loads its message history and activates the input bar.
+
+#### 9.3.4 Room Chat
+- Header shows room name, description, visibility badge (public/private).
+- Messages show: avatar placeholder, username, timestamp, content, attachments (images inline, files as download links), reply reference (quoted text).
+- "Edited" indicator on edited messages.
+- Deleted messages show "[message deleted]" placeholder.
+- Infinite scroll: loading spinner at top, fetches older messages via `GET /api/rooms/{roomId}/messages?before=<cursor>&limit=50`.
+
+#### 9.3.5 Personal Chat
+- Header shows contact username and online status.
+- Same message features as room chat.
+- Messages fetched via `GET /api/chats/{userId}/messages?before=<cursor>&limit=50`.
+
+#### 9.3.6 Manage Room Modal (5 tabs)
+- **Members**: searchable table with username, status, role; actions: promote to admin, ban, kick.
+- **Admins**: list of current admins; remove admin action; owner cannot be removed.
+- **Banned Users**: table with username, banned-by, date; unban action.
+- **Invitations**: username input + "Send invite" button (private rooms).
+- **Settings**: room name, description, visibility (public/private radio); "Save changes" and "Delete room" buttons.
+
+#### 9.3.7 Profile View
+- Display name (editable), username (read-only), email (read-only).
+- Change password form.
+- "Delete account" button with confirmation dialog.
+
+#### 9.3.8 Sessions View
+- List of active sessions: browser, IP address, last seen, "current" badge.
+- "Revoke" button per session.
+
+### 9.4 Real-Time Behavior
+
+| Feature | Transport | Backend Endpoint |
+|---|---|---|
+| New/edited/deleted messages (room) | WebSocket STOMP | Subscribe: `/topic/rooms/{roomId}` |
+| New personal messages | WebSocket STOMP | Subscribe: `/user/queue/messages` |
+| Presence updates | WebSocket STOMP | Subscribe: `/topic/rooms/{roomId}/presence` |
+| Notifications (friend requests, unread) | WebSocket STOMP | Subscribe: `/user/queue/notifications` |
+| Heartbeat (keep-alive / AFK) | WebSocket STOMP | Send: `/app/presence/heartbeat` every 30s |
+
+- STOMP connection established on login with JWT in `Authorization` header.
+- Auto-reconnect on disconnect with exponential backoff.
+- Messages arriving while scrolled up: show "N new messages ↓" badge instead of auto-scrolling.
+
+### 9.5 Chat Window Behavior
+
+- Auto-scroll to bottom on new message **only if** user is already at the bottom.
+- If user has scrolled up: no auto-scroll; show "new messages" indicator.
+- Infinite scroll upward: trigger fetch when scrolled near the top; show loading spinner; prepend older messages without scroll jump.
+- Emoji support in message content (rendered inline).
+- File/image attachment: button opens file picker; images ≤ 3 MB, files ≤ 20 MB; uploaded via `POST /api/attachments`; shown inline (images) or as download link (files).
+- Reply-to: clicking "Reply" on a message shows quoted preview above input; sent as `replyToId` in the message request.
+
+### 9.6 Unread Indicators
+
+- Unread message count badges shown next to room names and contact names in the sidebar.
+- Fetched via `GET /api/notifications/unread`.
+- Updated in real-time via `/user/queue/notifications` (UNREAD_UPDATE events).
+- Reset when user opens the chat: `POST /api/rooms/{roomId}/messages/read` or `POST /api/chats/{userId}/messages/read`.
+
+### 9.7 Responsive Design
+
+- Desktop-first (min-width 1024px): full 3-column layout.
+- Tablet (768–1023px): left sidebar collapsible, right panel hidden by default (toggle button).
+- Mobile (< 768px): single-column with bottom navigation; sidebar and members panel as slide-out drawers.
+
+---
+
+## 10. Frontend Milestones
+
+### Milestone 7 — Project Setup, Auth & Layout Shell
+**Deliverables:**
+- Vite + React + TypeScript project scaffolding in `frontend/`.
+- Tailwind CSS configuration and base styles.
+- React Router with route structure: `/` (landing), `/login`, `/register`, `/chat`.
+- Zustand store scaffolding: `useAuthStore`, `useRoomStore`, `useMessageStore`.
+- Axios HTTP client with JWT interceptor (auto-attach Bearer token, handle 401 → redirect to login).
+- Landing page with Sign In / Register / Forgot Password modal dialogs.
+- Auth flow: register → auto-login → redirect to `/chat`; login → redirect to `/chat`; logout → clear token → redirect to `/`.
+- Protected route wrapper (redirect to `/login` if no token).
+- Main chat layout shell: top nav bar, 3-column grid (left sidebar placeholder, center placeholder, right panel placeholder), bottom input bar placeholder.
+- Vite proxy to `http://localhost:8080` for API calls during development.
+
+### Milestone 8 — Rooms, Messages & Real-Time
+**Deliverables:**
+- STOMP WebSocket connection on login (JWT auth, auto-reconnect).
+- Left sidebar: room list (public + private, grouped), search/filter, unread badges, "Create room" modal.
+- Room chat view: message history with infinite scroll, message rendering (text, timestamps, edited indicator, deleted placeholder, reply quotes, inline images, file download links).
+- Message input bar: multiline text input, emoji picker (emoji-mart), file attach button (upload via REST, preview before send), reply-to indicator.
+- Real-time room messages: subscribe to `/topic/rooms/{roomId}` → append/update/remove messages; "new messages ↓" indicator when scrolled up.
+- Room right panel: room info header, member list with presence dots (online/AFK/offline), "Invite user" button.
+- Create room modal: name, description, visibility (public/private) → `POST /api/rooms`.
+- Join/leave room buttons.
+- Presence heartbeat: send `/app/presence/heartbeat` every 30s; subscribe to `/topic/rooms/{roomId}/presence` for member status updates.
+
+### Milestone 9 — Contacts, Admin, Profile & Polish
+**Deliverables:**
+- Contacts sidebar section: friend list with online status, unread badges.
+- Personal chat view: message history, input bar, real-time via `/user/queue/messages`.
+- Friend request flow: send request, incoming requests list, accept/decline.
+- User ban/unban from contacts.
+- Manage Room modal (5 tabs): Members, Admins, Banned Users, Invitations, Settings.
+- Admin actions: promote/demote admin, kick member, ban/unban member, delete messages.
+- Room settings: edit name/description/visibility, delete room with confirmation.
+- Profile view: edit display name, change password, delete account with confirmation.
+- Sessions view: list active sessions, revoke individual sessions.
+- Unread count integration: fetch on load, update via notifications, reset on chat open.
+- Notifications: friend request toasts, room invite handling.
+- Responsive layout: collapsible sidebar, mobile drawers, bottom nav on small screens.
+- Loading states, error handling, empty states across all views.
