@@ -155,6 +155,7 @@ public class MessageServiceImpl implements MessageService {
                 && !roomMemberRepository.existsByIdRoomIdAndIdUserId(roomId, requesterId)) {
             throw new ForbiddenException("Access to private room denied");
         }
+        if (before == null) before = OffsetDateTime.now().plusYears(100);
         List<Message> messages = messageRepository.findRoomMessages(
                 roomId, before, PageRequest.of(0, limit));
         return toResponses(messages);
@@ -167,6 +168,7 @@ public class MessageServiceImpl implements MessageService {
         if (requesterId.equals(userId)) {
             throw new ForbiddenException("Cannot access personal messages with yourself");
         }
+        if (before == null) before = OffsetDateTime.now().plusYears(100);
         List<Message> messages = messageRepository.findPersonalMessages(
                 requesterId, userId, before, PageRequest.of(0, limit));
         return toResponses(messages);

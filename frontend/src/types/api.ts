@@ -68,6 +68,12 @@ export interface UnreadCount {
   count: number;
 }
 
+export interface BanResponse {
+  user: User;
+  bannedBy: User;
+  bannedAt: string;
+}
+
 export interface ChatMessageEvent {
   messageId: number;
   chatType: 'ROOM' | 'PERSONAL';

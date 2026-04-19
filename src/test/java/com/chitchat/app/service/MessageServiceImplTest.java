@@ -319,7 +319,7 @@ class MessageServiceImplTest {
     @Test
     void getRoomMessages_publicRoom_success() {
         when(entityLoader.loadRoom(10L)).thenReturn(publicRoom);
-        when(messageRepository.findRoomMessages(10L, null, PageRequest.of(0, 50)))
+        when(messageRepository.findRoomMessages(any(), any(), any()))
                 .thenReturn(List.of(roomMessage));
         when(attachmentRepository.findByMessageIdIn(List.of(100L))).thenReturn(List.of());
 
@@ -342,7 +342,7 @@ class MessageServiceImplTest {
 
     @Test
     void getPersonalMessages_success() {
-        when(messageRepository.findPersonalMessages(1L, 2L, null, PageRequest.of(0, 50)))
+        when(messageRepository.findPersonalMessages(any(), any(), any(), any()))
                 .thenReturn(List.of(personalMessage));
         when(attachmentRepository.findByMessageIdIn(List.of(101L))).thenReturn(List.of());
 

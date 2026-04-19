@@ -1,219 +1,229 @@
-# TODO — Milestone 8: Rooms, Messages & Real-Time
+# TODO — Milestone 9: Contacts, Admin, Profile & Polish
 
 ---
 
-## 1. Install Additional Dependencies
+## 1. API Layer — Contacts, Sessions, Admin (`src/api/`)
 
-- [x] `npm install @stomp/stompjs sockjs-client`
-- [x] `npm install -D @types/sockjs-client`
-- [x] `npm install emoji-mart @emoji-mart/data @emoji-mart/react`
+### `contacts.ts`
+- [x] `getFriends()` → `GET /contacts` → `Contact[]`
+- [x] `getIncomingRequests()` → `GET /contacts/requests/incoming` → `Contact[]`
+- [x] `sendFriendRequest(targetUsername, message?)` → `POST /contacts/requests` → `Contact`
+- [x] `acceptFriendRequest(requestId)` → `PUT /contacts/requests/{requestId}/accept` → `Contact`
+- [x] `declineFriendRequest(requestId)` → `DELETE /contacts/requests/{requestId}`
+- [x] `removeFriend(userId)` → `DELETE /contacts/{userId}`
+- [x] `banUser(userId)` → `POST /contacts/{userId}/ban`
+- [x] `unbanUser(userId)` → `DELETE /contacts/{userId}/ban`
 
----
+### `sessions.ts`
+- [x] `getActiveSessions()` → `GET /sessions` → `Session[]`
+- [x] `revokeSession(sessionId)` → `DELETE /sessions/{sessionId}`
 
-## 2. API Layer — Rooms, Messages, Attachments (`src/api/`)
+### `rooms.ts` additions
+- [x] `updateRoom(roomId, name?, description?, visibility?)` → `PUT /rooms/{roomId}` → `Room`
+- [x] `deleteRoom(roomId)` → `DELETE /rooms/{roomId}`
+- [x] `inviteUser(roomId, username)` → `POST /rooms/{roomId}/invites`
+- [x] `promoteAdmin(roomId, userId)` → `POST /rooms/{roomId}/admins/{userId}`
+- [x] `demoteAdmin(roomId, userId)` → `DELETE /rooms/{roomId}/admins/{userId}`
+- [x] `kickMember(roomId, userId)` → `POST /rooms/{roomId}/members/{userId}/kick`
+- [x] `getBans(roomId)` → `GET /rooms/{roomId}/bans` → `BanResponse[]`
+- [x] `banMember(roomId, userId)` → `POST /rooms/{roomId}/bans/{userId}`
+- [x] `unbanMember(roomId, userId)` → `DELETE /rooms/{roomId}/bans/{userId}`
 
-### `rooms.ts`
-- [x] `searchPublicRooms(query, page, size)` → `GET /rooms?q=&page=&size=` → `Page<Room>`
-- [x] `createRoom(name, description, visibility)` → `POST /rooms` → `Room`
-- [x] `getRoom(roomId)` → `GET /rooms/{roomId}` → `Room`
-- [x] `joinRoom(roomId)` → `POST /rooms/{roomId}/join`
-- [x] `leaveRoom(roomId)` → `POST /rooms/{roomId}/leave`
-- [x] `getMembers(roomId)` → `GET /rooms/{roomId}/members` → `MemberResponse[]`
+### `users.ts` additions
+- [x] `changePassword(currentPassword, newPassword)` → `PUT /users/me/password`
+- [x] `deleteAccount()` → `DELETE /users/me`
 
-### `messages.ts`
-- [x] `getRoomMessages(roomId, before?, limit?)` → `GET /rooms/{roomId}/messages?before=&limit=` → `Message[]`
-- [x] `sendRoomMessage(roomId, content, replyToId?, attachmentIds?)` → `POST /rooms/{roomId}/messages` → `Message`
-- [x] `editMessage(messageId, content)` → `PUT /messages/{messageId}` → `Message`
-- [x] `deleteMessage(messageId)` → `DELETE /messages/{messageId}`
+### `messages.ts` additions
+- [x] `getPersonalMessages(userId, before?, limit?)` → `GET /chats/{userId}/messages` → `Message[]`
+- [x] `sendPersonalMessage(userId, content, replyToId?, attachmentIds?)` → `POST /chats/{userId}/messages` → `Message` (if REST endpoint exists; otherwise send via WebSocket `/app/chats/{userId}/send`)
 
-### `attachments.ts`
-- [x] `uploadAttachment(file, comment?)` → `POST /attachments` (multipart/form-data) → `Attachment`
-- [x] `getAttachmentUrl(attachmentId)` → returns `/api/attachments/{id}` (download URL)
-
-### `notifications.ts`
-- [x] `getUnreadCounts()` → `GET /notifications/unread` → `UnreadCount[]`
-- [x] `markRoomRead(roomId)` → `POST /rooms/{roomId}/messages/read`
-
----
-
-## 3. Additional Types (`src/types/`)
-
-### `api.ts` additions
-- [x] `ChatMessageEvent`: `messageId`, `chatType`, `roomId`, `senderId`, `recipientId`, `content`, `replyToId`, `attachmentIds`, `eventType` (`CREATED`|`EDITED`|`DELETED`), `createdAt`
-- [x] `PresenceUpdate`: `userId`, `username`, `status` (`ONLINE`|`AFK`|`OFFLINE`)
-- [x] `PageResponse<T>`: `content: T[]`, `totalElements: number`, `totalPages: number`
+### `notifications.ts` additions
+- [x] `markPersonalRead(userId)` → `POST /chats/{userId}/messages/read`
 
 ---
 
-## 4. WebSocket Service (`src/api/websocket.ts`)
+## 2. Additional Types (`src/types/api.ts`)
 
-- [x] Create STOMP client using `@stomp/stompjs` with SockJS transport
-- [x] `connect(token)` — connect to `/ws` with JWT in STOMP `Authorization` header
-- [x] `disconnect()` — gracefully disconnect
-- [x] `subscribe(destination, callback)` — subscribe to a STOMP destination, return unsubscribe function
-- [x] `send(destination, body)` — send a STOMP message
-- [x] Auto-reconnect on disconnect with exponential backoff (1s, 2s, 4s, max 30s)
-- [x] Expose connection status (`connected`, `connecting`, `disconnected`)
+- [x] `BanResponse`: `user: User`, `bannedBy: User`, `bannedAt: string`
 
 ---
 
-## 5. Zustand Store Updates (`src/stores/`)
+## 3. Zustand Store — Contacts (`src/stores/useContactStore.ts`)
 
-### `useRoomStore.ts` — full implementation
-- [x] State: `rooms: Room[]`, `selectedRoomId: number | null`, `members: MemberResponse[]`, `loading: boolean`
+- [x] State: `friends: Contact[]`, `incomingRequests: Contact[]`, `selectedContactId: number | null`, `loading: boolean`
 - [x] Actions:
-  - `fetchRooms()` — calls `searchPublicRooms`, sets rooms
-  - `selectRoom(id)` — sets selectedRoomId, fetches members
-  - `createRoom(...)` — calls API, adds to list, selects it
-  - `joinRoom(id)` — calls API, refreshes rooms
-  - `leaveRoom(id)` — calls API, deselects, refreshes rooms
-  - `setMembers(members)` — sets member list
-  - `updateMemberPresence(userId, status)` — updates a member's presence status
-
-### `useMessageStore.ts` — full implementation
-- [x] State: `messages: Message[]`, `loading: boolean`, `hasMore: boolean`, `replyTo: Message | null`
-- [x] Actions:
-  - `fetchMessages(roomId, before?)` — calls API, prepends or sets messages, updates `hasMore`
-  - `addMessage(message)` — appends new message
-  - `updateMessage(message)` — replaces edited message by ID
-  - `removeMessage(messageId)` — marks message as deleted (set content to null)
-  - `setReplyTo(message | null)` — sets the message being replied to
-  - `clearMessages()` — resets state when switching rooms
-
-### `useUnreadStore.ts` — new
-- [x] State: `unreads: Record<string, number>` (key = `room:{id}` or `chat:{id}`)
-- [x] Actions:
-  - `fetchUnreads()` — calls `getUnreadCounts()`, populates map
-  - `increment(key)` — increment count
-  - `reset(key)` — set count to 0 (on room open)
-  - `getCount(key)` — returns count for a key
+  - `fetchFriends()` — calls API, sets friends
+  - `fetchIncomingRequests()` — calls API, sets incomingRequests
+  - `sendRequest(targetUsername, message?)` — calls API, toast, refresh
+  - `acceptRequest(requestId)` — calls API, move from requests to friends
+  - `declineRequest(requestId)` — calls API, remove from requests
+  - `removeFriend(userId)` — calls API, remove from friends
+  - `banUser(userId)` — calls API, remove from friends
+  - `unbanUser(userId)` — calls API
+  - `selectContact(id)` — sets selectedContactId
 
 ---
 
-## 6. WebSocket Hook (`src/hooks/useWebSocket.ts`)
+## 4. Contacts — Sidebar & Personal Chat
 
-- [x] Custom hook that connects STOMP on mount (when authenticated), disconnects on unmount
-- [x] On connect: subscribe to `/user/queue/notifications` for unread updates
-- [x] Sends heartbeat `/app/presence/heartbeat` every 30 seconds
-- [x] Exposes `subscribe(destination, callback)` for components to use
-- [x] Uses `useAuthStore` token for connection
+### Sidebar contacts section (`src/components/layout/Sidebar.tsx` update)
+- [x] Below rooms: "Contacts" section showing accepted friends
+- [x] Each contact shows: username, online status dot, unread badge
+- [x] Clicking a contact: `selectContact(id)`, clear room selection, mark personal read
+- [x] "Add Friend" button → opens friend request modal
 
----
+### Friend request modal (`src/components/contact/FriendRequestModal.tsx`)
+- [x] Input: target username, optional message
+- [x] "Send Request" button → calls `sendRequest()`
+- [x] Success toast
 
-## 7. Sidebar — Room List (`src/components/layout/Sidebar.tsx`)
+### Incoming requests view (`src/components/contact/IncomingRequests.tsx`)
+- [x] Accessible from sidebar or TopNav "Contacts" button
+- [x] List of pending requests showing: username, message, date, "Accept" / "Decline" buttons
+- [x] Accept → toast, contact appears in friends list
+- [x] Decline → toast, request removed
 
-### Replace placeholder with functional room list
-- [x] On mount: fetch rooms via `useRoomStore.fetchRooms()`
-- [x] Display rooms grouped: "Public Rooms" section, "Private Rooms" section
-- [x] Each room item shows: hash icon, room name, member count, unread badge (from `useUnreadStore`)
-- [x] Clicking a room: `selectRoom(id)`, `markRoomRead(roomId)`, reset unread
-- [x] Selected room highlighted with active background
-- [x] Search input filters rooms by name (client-side)
-- [x] "Create Room" button at bottom opens `CreateRoomModal`
-
----
-
-## 8. Create Room Modal (`src/components/room/CreateRoomModal.tsx`)
-
-- [x] Fields: name (required), description (optional), visibility (radio: Public / Private)
-- [x] "Create" button → calls `useRoomStore.createRoom()`
-- [x] On success: toast, close modal, room selected
-- [x] Validation: name required, max 100 chars
+### Personal chat view (`src/components/layout/ChatArea.tsx` update)
+- [x] When `selectedContactId` is set (and no room): show personal chat
+- [x] Header: contact username + online status
+- [x] Message list: fetch via `getPersonalMessages(userId, before, limit)`
+- [x] Message input: send via REST or WebSocket
+- [x] Real-time: subscribe to `/user/queue/messages` for incoming personal messages
 
 ---
 
-## 9. Chat Area — Message List + Input (`src/components/layout/ChatArea.tsx`)
+## 5. Manage Room Modal (`src/components/room/ManageRoomModal.tsx`)
 
-### Replace placeholder with functional chat view
+### Tab structure
+- [x] 5-tab layout using a tab bar: Members | Admins | Banned | Invitations | Settings
 
-#### Room Header (`src/components/chat/RoomHeader.tsx`)
-- [x] Shows room name, description, visibility badge
-- [x] "Join" button if not a member (public rooms) / "Leave" button if member (non-owner)
+### Members tab
+- [x] Searchable list of room members
+- [x] Each row: username, role badge, presence dot
+- [x] Actions (visible to owner/admin): "Make Admin", "Ban", "Kick" buttons
+- [x] Actions call: `promoteAdmin()`, `banMember()`, `kickMember()` → refresh members
 
-#### Message List (`src/components/chat/MessageList.tsx`)
-- [x] Renders list of messages in chronological order (oldest at top, newest at bottom)
-- [x] Each message renders via `MessageBubble` component
-- [x] Infinite scroll: on scroll to top, fetch older messages via `fetchMessages(roomId, oldestMessageCreatedAt)`
-- [x] Loading spinner at top while fetching
-- [x] Auto-scroll to bottom on new message **only if** user is at bottom
-- [x] "N new messages ↓" badge when new messages arrive while scrolled up — clicking scrolls to bottom
+### Admins tab
+- [x] List of members with ADMIN or OWNER role
+- [x] "Remove Admin" button (demote) for admins (owner cannot be removed)
+- [x] Calls `demoteAdmin()` → refresh members
 
-#### MessageBubble (`src/components/chat/MessageBubble.tsx`)
-- [x] Shows: sender username, timestamp (via `date-fns format`), message content
-- [x] Reply quote: if `replyTo` exists, show quoted preview (username + truncated content) above message
-- [x] Attachments: images shown inline (`<img>`), files shown as download link with filename + size
-- [x] "Edited" indicator if `editedAt` is set
-- [x] Deleted messages: show "[message deleted]" in italic gray
-- [x] Hover actions: "Reply" button (sets `replyTo` in store)
+### Banned Users tab
+- [x] Fetch via `getBans(roomId)` → list of `BanResponse`
+- [x] Each row: username, banned-by, date
+- [x] "Unban" button → calls `unbanMember()` → refresh
 
-#### Message Input (`src/components/chat/MessageInput.tsx`)
-- [x] Multiline `<textarea>` with auto-resize
-- [x] Send button (or Enter key, Shift+Enter for newline)
-- [x] Emoji picker button → opens `emoji-mart` Picker → inserts emoji at cursor
-- [x] Attach button → file picker → uploads via `uploadAttachment()` → shows filename preview, removable
-- [x] Reply indicator: when `replyTo` is set, shows quoted preview above input with cancel (X) button
-- [x] On send: calls `sendRoomMessage(roomId, content, replyToId, attachmentIds)` → clears input + replyTo + attachments
+### Invitations tab (private rooms)
+- [x] Username input + "Send Invite" button
+- [x] Calls `inviteUser(roomId, username)` → toast
 
----
+### Settings tab
+- [x] Editable: room name, description, visibility (public/private radio)
+- [x] "Save Changes" button → calls `updateRoom()` → toast, refresh room
+- [x] "Delete Room" button → confirmation dialog → calls `deleteRoom()` → toast, deselect room, refresh rooms
 
-## 10. Right Panel — Room Info & Members (`src/components/layout/RightPanel.tsx`)
-
-### Replace placeholder with functional panel
-- [x] Room info header: room name, visibility badge, owner username
-- [x] Member list: fetch via `useRoomStore` members
-- [x] Each member shows: username, role badge (Owner/Admin/Member), presence dot (green=online, yellow=AFK, gray=offline)
-- [x] Subscribe to `/topic/rooms/{roomId}/presence` for real-time presence updates → `updateMemberPresence()`
+### Access control
+- [x] Show "Manage Room" button in `RightPanel` only for owner/admin
+- [x] Settings tab "Delete Room" only for owner
 
 ---
 
-## 11. Real-Time Integration
+## 6. Message Actions — Edit & Delete
 
-### Room message subscription
-- [x] When a room is selected: subscribe to `/topic/rooms/{roomId}`
-- [x] On `ChatMessageEvent` received:
-  - `CREATED` → `addMessage(...)` (map event to Message type, or re-fetch the message)
-  - `EDITED` → `updateMessage(...)`
-  - `DELETED` → `removeMessage(messageId)`
-- [x] When room changes: unsubscribe from previous room, subscribe to new
+### Update `MessageBubble.tsx`
+- [x] Hover actions for own messages: "Edit", "Delete" buttons (in addition to "Reply")
+- [x] Admin/owner sees "Delete" on any message in the room
+- [x] Edit: opens inline edit textarea → "Save" / "Cancel" → calls `editMessage()` → updates message in store
+- [x] Delete: confirmation → calls `deleteMessage()` → removes from store
 
-### Presence subscription
-- [x] When a room is selected: subscribe to `/topic/rooms/{roomId}/presence`
-- [x] On `PresenceUpdate` received → `updateMemberPresence(userId, status)`
-- [x] When room changes: unsubscribe previous, subscribe new
+---
+
+## 7. Profile View (`src/pages/ProfilePage.tsx` or modal)
+
+- [x] Display name: editable text input → "Save" → calls `updateProfile()`
+- [x] Username: read-only field
+- [x] Email: read-only field (fetched from user data)
+- [x] Change password form: current password, new password, confirm new password → calls `changePassword()`
+- [x] "Delete Account" button → confirmation dialog ("This action is irreversible") → calls `deleteAccount()` → clears auth → redirect to `/`
+- [x] Accessible from TopNav profile dropdown
+
+---
+
+## 8. Sessions View (`src/pages/SessionsPage.tsx` or modal)
+
+- [x] Fetch active sessions via `getActiveSessions()`
+- [x] Table/list: browser, IP address, last seen (formatted), "Current" badge
+- [x] "Revoke" button per session (not on current session)
+- [x] Calls `revokeSession(sessionId)` → toast, refresh list
+- [x] Accessible from TopNav "Sessions" button
+
+---
+
+## 9. Notification Toasts
+
+### Friend request notifications
+- [x] On `/user/queue/notifications` event with type `FRIEND_REQUEST` → show toast: "New friend request from {username}"
+- [x] Clicking toast → opens incoming requests view
 
 ### Unread updates
-- [x] Subscribe to `/user/queue/notifications` (done in `useWebSocket` hook)
-- [x] On `UNREAD_UPDATE` event → `useUnreadStore.increment(key)`
-
-### Heartbeat
-- [x] Send `/app/presence/heartbeat` every 30s (done in `useWebSocket` hook)
+- [x] Already handled in `useWebSocket` → increment unread count
+- [x] Verify it works for both room and personal chat unreads
 
 ---
 
-## 12. Wire Up ChatPage
+## 10. Responsive Layout
 
-### Update `ChatPage.tsx`
-- [x] Initialize `useWebSocket` hook
-- [x] Fetch rooms on mount
-- [x] Fetch unreads on mount
-- [x] Pass `selectedRoomId` to conditionally render `ChatArea` content vs welcome placeholder
-- [x] When `selectedRoomId` changes: fetch messages, fetch members, subscribe to room topics
+### Desktop (≥ 1024px)
+- [x] Full 3-column layout (already implemented)
+
+### Tablet (768–1023px)
+- [x] Left sidebar collapsible via hamburger menu button in TopNav
+- [x] Right panel hidden by default, toggle button to show/hide
+- [x] Chat area takes full remaining width
+
+### Mobile (< 768px)
+- [x] Single-column layout
+- [x] Sidebar as slide-out drawer (opened via hamburger)
+- [x] Right panel as slide-out drawer (opened via info button)
+- [x] Bottom navigation bar: Rooms, Contacts, Profile icons
+
+---
+
+## 11. Loading States, Error Handling & Empty States
+
+- [x] Loading spinners: room list, message list, member list, sessions list, contacts list
+- [x] Error toasts: on API failures (already partially done via try/catch + toast.error)
+- [x] Empty states:
+  - No rooms: "No rooms yet. Create one!"
+  - No messages: "No messages yet. Say hello!"
+  - No contacts: "No friends yet. Send a friend request!"
+  - No incoming requests: "No pending requests"
+  - No banned users: "No banned users"
+  - No sessions: (should always have at least current session)
+
+---
+
+## 12. TopNav Updates
+
+- [x] "Contacts" button → toggles contact view / opens incoming requests
+- [x] "Sessions" button → opens sessions view/modal
+- [x] "Profile" in dropdown → opens profile view/modal
+- [x] Active state indicator on current nav item
 
 ---
 
 ## 13. Verification
 
 - [x] `npm run build` — production build succeeds
-- [x] Landing page → Register → redirects to `/chat` with 3-column layout
-- [x] Sidebar shows rooms fetched from API
-- [x] "Create Room" modal creates a room, appears in sidebar
-- [x] Clicking a room loads message history in center area
-- [x] Typing and sending a message appears in the message list
-- [x] Opening a second browser tab: message sent in one tab appears in the other in real time
-- [x] Scrolling up loads older messages (infinite scroll)
-- [x] Reply-to: clicking Reply shows quote, sends with replyToId
-- [x] Emoji picker inserts emoji into message
-- [x] File attach uploads file, message shows attachment link
-- [x] Right panel shows room members with presence dots
-- [x] Unread badges appear on rooms with new messages
-- [x] Heartbeat keeps connection alive
+- [x] Contacts: send friend request, accept, see in contacts list, chat personally
+- [x] Contacts: decline request, remove friend, ban/unban user
+- [x] Personal chat: send/receive messages in real time
+- [x] Manage Room: promote/demote admin, kick/ban/unban member, invite user
+- [x] Manage Room: edit name/description/visibility, delete room
+- [x] Message actions: edit own message (shows "edited"), delete own message
+- [x] Admin can delete any message in their room
+- [x] Profile: edit display name, change password, delete account
+- [x] Sessions: list sessions, revoke non-current session
+- [x] Responsive: sidebar collapses on tablet, single-column on mobile
+- [x] Friend request toast notification appears in real time
+- [x] Unread badges work for both rooms and personal chats

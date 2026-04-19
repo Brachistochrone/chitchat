@@ -15,4 +15,9 @@ export const messagesApi = {
 
   deleteMessage: (messageId: number) =>
     client.delete(`/messages/${messageId}`),
+
+  getPersonalMessages: (userId: number, before?: string, limit = 50) =>
+    client.get<Message[]>(`/chats/${userId}/messages`, {
+      params: { before, limit },
+    }),
 };
