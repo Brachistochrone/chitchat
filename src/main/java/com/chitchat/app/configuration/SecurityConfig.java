@@ -40,6 +40,8 @@ public class SecurityConfig {
                     AppConstants.API_DOCS_PATH
                 ).permitAll()
                 .requestMatchers(AppConstants.WEBSOCKET_PATH).permitAll()
+                .requestMatchers(AppConstants.GRAPHQL_PATH).permitAll()
+                .requestMatchers(AppConstants.GRAPHIQL_PATH).permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

@@ -1,0 +1,155 @@
+scalar DateTime
+
+enum RoomVisibility { PUBLIC, PRIVATE }
+enum RoomRole       { OWNER, ADMIN, MEMBER }
+enum PresenceStatus { ONLINE, AFK, OFFLINE }
+enum ContactStatus  { PENDING, ACCEPTED }
+enum ChatType       { ROOM, PERSONAL }
+enum EventType      { CREATED, EDITED, DELETED }
+
+type User {
+    id:          ID!
+    username:    String!
+    displayName: String
+    createdAt:   DateTime!
+}
+
+type Room {
+    id:          ID!
+    name:        String!
+    description: String
+    visibility:  RoomVisibility!
+    owner:       User!
+    memberCount: Int!
+    createdAt:   DateTime!
+}
+
+type RoomMember {
+    user:     User!
+    role:     RoomRole!
+    joinedAt: DateTime!
+}
+
+type Message {
+    id:          ID!
+    chatType:    ChatType!
+    sender:      User!
+    content:     String
+    replyTo:     Message
+    attachments: [Attachment!]!
+    editedAt:    DateTime
+    createdAt:   DateTime!
+}
+
+type Attachment {
+    id:               ID!
+    originalFilename: String!
+    fileSize:         Int!
+    mimeType:         String
+    comment:          String
+    downloadUrl:      String!
+}
+
+type Contact {
+    id:        ID!
+    user:      User!
+    status:    ContactStatus!
+    message:   String
+    createdAt: DateTime!
+}
+
+type Session {
+    id:         ID!
+    browser:    String
+    ipAddress:  String
+    lastSeenAt: DateTime!
+    current:    Boolean!
+}
+
+type AuthPayload {
+    token: String!
+    user:  User!
+}
+
+type MessagePage {
+    items:      [Message!]!
+    nextCursor: String
+}
+
+type RoomPage {
+    items:      [Room!]!
+    totalCount: Int!
+}
+
+type MessageEvent {
+    type:    EventType!
+    message: Message!
+}
+
+type PresenceEvent {
+    userId:   ID!
+    username: String!
+    status:   PresenceStatus!
+}
+
+type NotificationEvent {
+    type:    String!
+    payload: String!
+}
+
+type Query {
+    me:                                          User!
+    user(username: String!):                     User
+    mySessions:                                  [Session!]!
+    rooms(query: String, page: Int, size: Int):  RoomPage!
+    room(id: ID!):                               Room
+    roomMembers(roomId: ID!):                    [RoomMember!]!
+    roomBans(roomId: ID!):                       [User!]!
+    roomMessages(roomId: ID!, before: String, limit: Int):       MessagePage!
+    personalMessages(userId: ID!, before: String, limit: Int):   MessagePage!
+    contacts:                                    [Contact!]!
+    pendingRequests:                              [Contact!]!
+}
+
+type Mutation {
+    register(email: String!, password: String!, username: String!):  AuthPayload!
+    login(email: String!, password: String!):                        AuthPayload!
+    logout:                                                         Boolean!
+    requestPasswordReset(email: String!):                            Boolean!
+    confirmPasswordReset(token: String!, newPassword: String!):     Boolean!
+    changePassword(currentPassword: String!, newPassword: String!): Boolean!
+    deleteAccount:                                                  Boolean!
+
+    revokeSession(sessionId: ID!):                                  Boolean!
+
+    createRoom(name: String!, description: String, visibility: RoomVisibility!): Room!
+    updateRoom(id: ID!, name: String, description: String, visibility: RoomVisibility): Room!
+    deleteRoom(id: ID!):                                            Boolean!
+    joinRoom(id: ID!):                                              Boolean!
+    leaveRoom(id: ID!):                                             Boolean!
+    inviteToRoom(roomId: ID!, username: String!):                   Boolean!
+    promoteAdmin(roomId: ID!, userId: ID!):                         Boolean!
+    demoteAdmin(roomId: ID!, userId: ID!):                          Boolean!
+    kickMember(roomId: ID!, userId: ID!):                           Boolean!
+    banFromRoom(roomId: ID!, userId: ID!):                          Boolean!
+    unbanFromRoom(roomId: ID!, userId: ID!):                        Boolean!
+
+    sendRoomMessage(roomId: ID!, content: String!, replyToId: ID, attachmentIds: [ID!]):     Message!
+    sendPersonalMessage(userId: ID!, content: String!, replyToId: ID, attachmentIds: [ID!]): Message!
+    editMessage(id: ID!, content: String!):                         Message!
+    deleteMessage(id: ID!):                                         Boolean!
+
+    sendFriendRequest(username: String!, message: String):          Contact!
+    acceptFriendRequest(requestId: ID!):                            Contact!
+    declineFriendRequest(requestId: ID!):                           Boolean!
+    removeFriend(userId: ID!):                                      Boolean!
+    banUser(userId: ID!):                                           Boolean!
+    unbanUser(userId: ID!):                                         Boolean!
+}
+
+type Subscription {
+    roomMessages(roomId: ID!):  MessageEvent!
+    personalMessages:           MessageEvent!
+    roomPresence(roomId: ID!):  PresenceEvent!
+    notifications:              NotificationEvent!
+}

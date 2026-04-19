@@ -19,6 +19,8 @@ public final class AppConstants {
     public static final String SWAGGER_UI_HTML_PATH = "/swagger-ui.html";
     public static final String API_DOCS_PATH        = "/v3/api-docs/**";
     public static final String WEBSOCKET_PATH       = "/ws/**";
+    public static final String GRAPHQL_PATH         = "/graphql";
+    public static final String GRAPHIQL_PATH        = "/graphiql";
 
     // ── Kafka ─────────────────────────────────────────────────────────
     public static final String KAFKA_GROUP_ID                = "chitchat";

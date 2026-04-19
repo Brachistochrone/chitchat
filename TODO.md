@@ -1,200 +1,197 @@
-# TODO — Milestone 5: Contacts & Access Control Hardening
+# TODO — Milestone 6: GraphQL, Polish & Packaging
 
 ---
 
-## 1. DTOs
+## 1. GraphQL Schema (`src/main/resources/graphql/schema.graphqls`)
 
-### Request DTOs (`dto/request/`)
-- [x] `SendFriendRequestDto`:
-  - `targetUsername` (`@NotBlank`)
-  - `message` (`@Size(max=255)`, optional)
-
-### Response DTOs (`dto/response/`)
-- [x] `ContactResponse`:
-  - `id` (`Long`), `user` (`UserResponse`), `status` (`ContactStatus`), `message` (`String`), `createdAt` (`OffsetDateTime`)
-
-### EntityMapper updates (`util/EntityMapper.java`)
-- [x] Add `toContactResponse(Contact contact, Long requesterId)` — show the *other* user (requester or addressee, whichever is not the requesterId)
+- [x] Create `src/main/resources/graphql/` directory
+- [x] Define full schema file with:
+  - Scalars: `DateTime`
+  - Enums: `RoomVisibility`, `RoomRole`, `PresenceStatus`, `ContactStatus`, `ChatType`, `EventType`
+  - Types: `User`, `Room`, `RoomMember`, `Message`, `Attachment`, `Contact`, `Session`, `AuthPayload`, `MessagePage`, `RoomPage`
+  - Subscription event types: `MessageEvent`, `PresenceEvent`, `NotificationEvent`
+  - All Queries (§7 spec): `me`, `user`, `mySessions`, `rooms`, `room`, `roomMembers`, `roomBans`, `roomMessages`, `personalMessages`, `contacts`, `pendingRequests`
+  - All Mutations (§7 spec): auth (7), sessions (1), rooms (10), messages (4), contacts (6)
+  - All Subscriptions (§7 spec): `roomMessages`, `personalMessages`, `roomPresence`, `notifications`
 
 ---
 
-## 2. Repository additions
+## 2. GraphQL Configuration
 
-- [x] `ContactRepository` — add:
-  - `@Query` method `findFriends(Long userId)` → `List<Contact>` — all contacts with `ACCEPTED` status where user is requester OR addressee
-  - `void deleteByRequesterIdAndAddresseeIdOrRequesterIdAndAddresseeId(...)` — or use `@Modifying @Query` to delete contact between two users regardless of direction
-- [x] `UserBanRepository` — add:
-  - `Optional<UserBan> findByBannerIdAndBannedId(Long bannerId, Long bannedId)`
-  - `void deleteByBannerIdAndBannedId(Long bannerId, Long bannedId)`
+### `application.properties` additions
+- [x] `spring.graphql.graphiql.enabled=true` — enable GraphiQL playground
+- [x] `spring.graphql.websocket.path=/graphql` — WebSocket transport for subscriptions
+- [x] `spring.graphql.schema.printer.enabled=true` — introspection
 
----
-
-## 3. Service Layer
-
-### ContactService interface (`service/ContactService.java`)
-- [x] Define all methods:
-  - `List<ContactResponse> getFriends(Long userId)`
-  - `List<ContactResponse> getIncomingRequests(Long userId)`
-  - `ContactResponse sendFriendRequest(Long userId, SendFriendRequestDto request)`
-  - `ContactResponse acceptFriendRequest(Long userId, Long requestId)`
-  - `void declineFriendRequest(Long userId, Long requestId)`
-  - `void removeFriend(Long userId, Long friendUserId)`
-  - `void banUser(Long userId, Long targetUserId)`
-  - `void unbanUser(Long userId, Long targetUserId)`
-
-### ContactServiceImpl (`service/ContactServiceImpl.java`)
-- [x] `getFriends`:
-  - Query accepted contacts where user is requester OR addressee
-  - Return list of `ContactResponse` (showing the *other* user)
-- [x] `getIncomingRequests`:
-  - Query `contactRepository.findByAddresseeIdAndStatus(userId, PENDING)`
-  - Return list of `ContactResponse`
-- [x] `sendFriendRequest`:
-  - Resolve target user by username → `ResourceNotFoundException`
-  - Cannot send to self → `ForbiddenException`
-  - Check if already friends (either direction) → `ConflictException`
-  - Check if request already exists (either direction) → `ConflictException`
-  - Check if target has banned requester → `ForbiddenException`
-  - Save `Contact(requester=user, addressee=target, status=PENDING, message=...)`
-  - Publish `NotificationEvent(type=FRIEND_REQUEST)` to target
-  - Return `ContactResponse`
-- [x] `acceptFriendRequest`:
-  - Load contact by requestId → `ResourceNotFoundException`
-  - Verify current user is the addressee → `ForbiddenException`
-  - Verify status is `PENDING` → `ConflictException` if already accepted
-  - Update status to `ACCEPTED`, set `updatedAt`
-  - Return `ContactResponse`
-- [x] `declineFriendRequest`:
-  - Load contact by requestId → `ResourceNotFoundException`
-  - Verify current user is the addressee OR the requester (cancel own request) → `ForbiddenException`
-  - Delete the contact record
-- [x] `removeFriend`:
-  - Find accepted contact between userId and friendUserId (either direction) → `ResourceNotFoundException`
-  - Delete the contact record
-- [x] `banUser`:
-  - Cannot ban self → `ForbiddenException`
-  - Check if already banned → idempotent, return silently
-  - Save `UserBan(banner=user, banned=target)`
-  - Remove friendship if exists (delete Contact record between them)
-  - Delete any pending friend requests between them
-- [x] `unbanUser`:
-  - Find `UserBan` by bannerId and bannedId → no-op if not found
-  - Delete the ban record
+### DateTime scalar configuration (`graphql/config/ScalarConfig.java`)
+- [x] Register `ExtendedScalars.DateTime` from `graphql-java-extended-scalars` library
+- [x] Add `graphql-java-extended-scalars` dependency to `pom.xml`
+- [x] `@Bean RuntimeWiringConfigurer` to register the scalar
 
 ---
 
-## 4. REST Controller
+## 3. Query Resolvers (`graphql/query/`)
 
-### ContactController (`rest/ContactController.java`) — `/api/contacts`
-- [x] `GET /api/contacts` → `getFriends`; returns 200 + `List<ContactResponse>`
-- [x] `POST /api/contacts/requests` → `sendFriendRequest`; `@Valid`; returns 201 + `ContactResponse`
-- [x] `GET /api/contacts/requests/incoming` → `getIncomingRequests`; returns 200 + `List<ContactResponse>`
-- [x] `PUT /api/contacts/requests/{requestId}/accept` → `acceptFriendRequest`; returns 200 + `ContactResponse`
-- [x] `DELETE /api/contacts/requests/{requestId}` → `declineFriendRequest`; returns 204
-- [x] `DELETE /api/contacts/{userId}` → `removeFriend`; returns 204
-- [x] `POST /api/contacts/{userId}/ban` → `banUser`; returns 204
-- [x] `DELETE /api/contacts/{userId}/ban` → `unbanUser`; returns 204
+### `UserQueryResolver.java`
+- [x] `@QueryMapping User me()` → delegates to `UserService.getMe`
+- [x] `@QueryMapping User user(String username)` → delegates to `UserService.getUserByUsername`
 
----
+### `SessionQueryResolver.java`
+- [x] `@QueryMapping List<Session> mySessions()` → delegates to `SessionService.getActiveSessions`
 
-## 5. Access Control Hardening
+### `RoomQueryResolver.java`
+- [x] `@QueryMapping RoomPage rooms(String query, Integer page, Integer size)` → delegates to `RoomService.searchPublicRooms`
+- [x] `@QueryMapping Room room(Long id)` → delegates to `RoomService.getRoom`
+- [x] `@QueryMapping List<RoomMember> roomMembers(Long roomId)` → delegates to `RoomService.getMembers`
+- [x] `@QueryMapping List<BanResponse> roomBans(Long roomId)` → delegates to `RoomService.getBans`
 
-### Room ban → message/file access denied
-- [x] `MessageServiceImpl.getRoomMessages`:
-  - Add check: if user is banned from the room (`roomBanRepository.existsByIdRoomIdAndIdUserId`) → `ForbiddenException`
-- [x] `AttachmentServiceImpl.checkDownloadAccess`:
-  - For room attachments: in addition to membership check, also check room ban → `ForbiddenException`
+### `MessageQueryResolver.java`
+- [x] `@QueryMapping MessagePage roomMessages(Long roomId, String before, Integer limit)` → delegates to `MessageService.getRoomMessages`; wraps result in `MessagePage` with `nextCursor`
+- [x] `@QueryMapping MessagePage personalMessages(Long userId, String before, Integer limit)` → delegates to `MessageService.getPersonalMessages`; wraps result in `MessagePage`
 
-### Personal message guards (already implemented in M3 — verify)
-- [x] Confirm `sendPersonalMessage` checks friendship + both-direction ban ✓
-- [x] Confirm `sendPersonalMessage` fails if either user has banned the other ✓
+### `ContactQueryResolver.java`
+- [x] `@QueryMapping List<Contact> contacts()` → delegates to `ContactService.getFriends`
+- [x] `@QueryMapping List<Contact> pendingRequests()` → delegates to `ContactService.getIncomingRequests`
 
 ---
 
-## 6. Account Deletion Cascade
+## 4. Mutation Resolvers (`graphql/mutation/`)
 
-### Update `AuthServiceImpl.deleteAccount(Long userId)`
-Replace soft-delete with full cascade:
-- [x] Delete all attachments uploaded by user (remove files from filesystem + DB records)
-- [x] Delete all messages sent by user
-- [x] Delete all rooms owned by user:
-  - For each owned room: delete room attachments, room messages, then room (FK cascades members, bans, invites)
-- [x] Remove user from all room memberships (`RoomMemberRepository.deleteAll(findByIdUserId)`)
-- [x] Delete all room bans involving user (as banned user)
-- [x] Delete all contacts involving user (both as requester and addressee)
-- [x] Delete all user bans involving user (both as banner and banned)
-- [x] Delete all unread counts involving user
-- [x] Revoke all sessions (`UserSessionRepository` — delete all for user)
-- [x] Delete the user record from DB
+### `AuthMutationResolver.java`
+- [x] `@MutationMapping AuthPayload register(String email, String password, String username)` → `AuthService.register`
+- [x] `@MutationMapping AuthPayload login(String email, String password)` → `AuthService.login`
+- [x] `@MutationMapping Boolean logout()` → `AuthService.logout`
+- [x] `@MutationMapping Boolean requestPasswordReset(String email)` → `AuthService.requestPasswordReset`
+- [x] `@MutationMapping Boolean confirmPasswordReset(String token, String newPassword)` → `AuthService.confirmPasswordReset`
+- [x] `@MutationMapping Boolean changePassword(String currentPassword, String newPassword)` → `AuthService.changePassword`
+- [x] `@MutationMapping Boolean deleteAccount()` → `AuthService.deleteAccount`
 
-### New repositories/methods needed for cascade
-- [x] `AttachmentRepository` — add `List<Attachment> findByUploaderId(Long uploaderId)`
-- [x] `MessageRepository` — add `@Modifying @Query` `deleteAllBySenderId(Long senderId)`
-- [x] `RoomRepository` — add `List<Room> findByOwnerId(Long ownerId)`
-- [x] `RoomBanRepository` — add `void deleteByIdUserId(Long userId)` (remove user from all room bans)
-- [x] `ContactRepository` — add `@Modifying @Query` `deleteAllByRequesterIdOrAddresseeId(Long id1, Long id2)`
-- [x] `UserBanRepository` — add `@Modifying @Query` `deleteAllByBannerIdOrBannedId(Long id1, Long id2)`
-- [x] `UnreadCountRepository` — add `void deleteByUserId(Long userId)`
+### `RoomMutationResolver.java`
+- [x] `@MutationMapping Room createRoom(...)` → `RoomService.createRoom`
+- [x] `@MutationMapping Room updateRoom(...)` → `RoomService.updateRoom`
+- [x] `@MutationMapping Boolean deleteRoom(Long id)` → `RoomService.deleteRoom`
+- [x] `@MutationMapping Boolean joinRoom(Long id)` → `RoomService.joinRoom`
+- [x] `@MutationMapping Boolean leaveRoom(Long id)` → `RoomService.leaveRoom`
+- [x] `@MutationMapping Boolean inviteToRoom(Long roomId, String username)` → `RoomService.inviteUser`
+- [x] `@MutationMapping Boolean promoteAdmin(Long roomId, Long userId)` → `RoomService.promoteAdmin`
+- [x] `@MutationMapping Boolean demoteAdmin(Long roomId, Long userId)` → `RoomService.demoteAdmin`
+- [x] `@MutationMapping Boolean kickMember(Long roomId, Long userId)` → `RoomService.kickMember`
+- [x] `@MutationMapping Boolean banFromRoom(Long roomId, Long userId)` → `RoomService.banMember`
+- [x] `@MutationMapping Boolean unbanFromRoom(Long roomId, Long userId)` → `RoomService.unbanMember`
 
----
+### `MessageMutationResolver.java`
+- [x] `@MutationMapping Message sendRoomMessage(Long roomId, String content, Long replyToId, List<Long> attachmentIds)` → `MessageService.sendRoomMessage`
+- [x] `@MutationMapping Message sendPersonalMessage(Long userId, String content, Long replyToId, List<Long> attachmentIds)` → `MessageService.sendPersonalMessage`
+- [x] `@MutationMapping Message editMessage(Long id, String content)` → `MessageService.editMessage`
+- [x] `@MutationMapping Boolean deleteMessage(Long id)` → `MessageService.deleteMessage`
 
-## 7. Caffeine Caching
-
-### Update `CacheConfig.java`
-- [x] Add `"presence"` cache name to the manager
-
-### Add `@Cacheable` / `@CacheEvict` annotations
-- [x] `EntityLoaderService.loadActiveUser` → `@Cacheable("users")`
-- [x] `EntityLoaderService.loadRoom` → `@Cacheable("roomMembers")` (or a new `"rooms"` cache)
-- [x] `RoomServiceImpl`:
-  - `createRoom` → `@CacheEvict("roomMembers")` (new member added)
-  - `joinRoom`, `leaveRoom`, `kickMember`, `banMember` → evict `roomMembers` for the room
-- [x] `ContactService`:
-  - `sendFriendRequest`, `acceptFriendRequest`, `removeFriend`, `banUser` → evict relevant user entries
-- [x] `AuthServiceImpl`:
-  - `deleteAccount` → evict user from `"users"` cache
+### `ContactMutationResolver.java`
+- [x] `@MutationMapping Contact sendFriendRequest(String username, String message)` → `ContactService.sendFriendRequest`
+- [x] `@MutationMapping Contact acceptFriendRequest(Long requestId)` → `ContactService.acceptFriendRequest`
+- [x] `@MutationMapping Boolean declineFriendRequest(Long requestId)` → `ContactService.declineFriendRequest`
+- [x] `@MutationMapping Boolean removeFriend(Long userId)` → `ContactService.removeFriend`
+- [x] `@MutationMapping Boolean banUser(Long userId)` → `ContactService.banUser`
+- [x] `@MutationMapping Boolean unbanUser(Long userId)` → `ContactService.unbanUser`
 
 ---
 
-## 8. Integration Tests
+## 5. Subscription Resolvers (`graphql/subscription/`)
 
-### `src/test/java/com/chitchat/app/service/ContactServiceImplTest.java`
-- [x] `sendFriendRequest_success` — contact saved with PENDING status
-- [x] `sendFriendRequest_toSelf` → `ForbiddenException`
-- [x] `sendFriendRequest_alreadyFriends` → `ConflictException`
-- [x] `sendFriendRequest_alreadyPending` → `ConflictException`
-- [x] `sendFriendRequest_targetBannedRequester` → `ForbiddenException`
-- [x] `acceptFriendRequest_success` — status updated to ACCEPTED
-- [x] `acceptFriendRequest_notAddressee` → `ForbiddenException`
-- [x] `acceptFriendRequest_alreadyAccepted` → `ConflictException`
-- [x] `declineFriendRequest_byAddressee_success`
-- [x] `declineFriendRequest_byRequester_success` (cancel own)
-- [x] `declineFriendRequest_byThirdParty` → `ForbiddenException`
-- [x] `removeFriend_success`
-- [x] `removeFriend_notFriends` → `ResourceNotFoundException`
-- [x] `banUser_success_removesFriendship`
-- [x] `banUser_alreadyBanned_idempotent`
-- [x] `unbanUser_success`
-- [x] `getFriends_returnsBothDirections`
-- [x] `getIncomingRequests_returnsPendingOnly`
+### `MessageSubscriptionResolver.java`
+- [x] `@SubscriptionMapping Flux<MessageEvent> roomMessages(Long roomId)` — subscribe to room messages via `SimpMessagingTemplate` or a reactive `Sinks.Many<>`; backed by the Kafka consumer that fans out to WebSocket
+- [x] `@SubscriptionMapping Flux<MessageEvent> personalMessages()` — subscribe to personal messages for the authenticated user
 
-### Access control tests (add to `MessageServiceImplTest.java`)
-- [x] `getRoomMessages_bannedUser` → `ForbiddenException`
+### `PresenceSubscriptionResolver.java`
+- [x] `@SubscriptionMapping Flux<PresenceEvent> roomPresence(Long roomId)` — subscribe to presence changes for members of a room
+
+### `NotificationSubscriptionResolver.java`
+- [x] `@SubscriptionMapping Flux<NotificationEvent> notifications()` — subscribe to notifications for the authenticated user
+
+### Subscription infrastructure
+- [x] Create `graphql/subscription/SubscriptionPublisher.java` — holds `Sinks.Many<>` per topic (room messages, personal messages, presence, notifications); consumers publish to sinks, subscription resolvers subscribe from sinks
+- [x] Update Kafka consumers (`MessageEventConsumer`, `PresenceStateConsumer`, `NotificationConsumer`) to also publish to `SubscriptionPublisher` sinks
 
 ---
 
-## 9. Smoke Test Checklist (Manual Verification)
+## 6. GraphQL Security
 
-- [x] `POST /api/contacts/requests` — 201; friend request created
-- [x] `GET /api/contacts/requests/incoming` — returns pending requests for addressee
-- [x] `PUT /api/contacts/requests/{id}/accept` — 200; status changes to ACCEPTED
-- [x] `GET /api/contacts` — returns accepted friends
-- [x] `DELETE /api/contacts/requests/{id}` — 204; request declined/cancelled
-- [x] `DELETE /api/contacts/{userId}` — 204; friendship removed
-- [x] `POST /api/contacts/{userId}/ban` — 204; friendship removed, messages blocked
-- [x] `DELETE /api/contacts/{userId}/ban` — 204; ban lifted
-- [x] Banned user tries to send personal message → 403
-- [x] Banned-from-room user tries `GET /api/rooms/{roomId}/messages` → 403
-- [x] Banned-from-room user tries `GET /api/attachments/{id}` (room file) → 403
-- [x] `DELETE /api/users/me` — full cascade: rooms, messages, files deleted
+- [x] Add `@Controller` annotation to all resolver classes (Spring GraphQL uses `@Controller` pattern)
+- [x] Use `SecurityUtil.getCurrentUserId()` in resolvers for authenticated user context
+- [x] Auth mutations (register, login, requestPasswordReset, confirmPasswordReset) should work without authentication — configure in `SecurityConfig`
+- [x] Add `/graphql` and `/graphiql` paths to `SecurityConfig` permitAll (for GraphiQL playground)
+
+### `SecurityConfig.java` updates
+- [x] Add `"/graphql"`, `"/graphiql"` to permitted paths (GraphQL endpoint handles its own auth via resolvers)
+
+### `AppConstants.java` updates
+- [x] Add `GRAPHQL_PATH = "/graphql"` and `GRAPHIQL_PATH = "/graphiql"` constants
+
+---
+
+## 7. DTO Additions for GraphQL
+
+### `dto/response/MessagePage.java`
+- [x] `items` (`List<MessageResponse>`), `nextCursor` (`String`)
+
+### `dto/response/RoomPage.java`
+- [x] `items` (`List<RoomResponse>`), `totalCount` (`int`)
+
+---
+
+## 8. README.md
+
+- [x] Create `README.md` at project root with:
+  - Project description
+  - Tech stack summary
+  - Prerequisites (Java 21, Docker, Maven)
+  - Build: `mvn clean package`
+  - Run: `docker compose up --build`
+  - REST API: `http://localhost:8080/swagger-ui.html`
+  - GraphQL: `http://localhost:8080/graphiql`
+  - Test: `mvn test`
+  - Project structure overview
+  - Environment variables table
+
+---
+
+## 9. Docker Polish
+
+### Verify `Dockerfile`
+- [x] Multi-stage build already in place ✓
+- [x] Alpine runtime with `libstdc++` ✓
+
+### Verify `docker-compose.yml`
+- [x] Health checks on postgres ✓
+- [x] Flyway runs before app ✓
+- [x] Kafka topic auto-creation ✓
+- [x] Ensure `app` container exposes all needed ports
+
+---
+
+## 10. Smoke Test Checklist (End-to-End)
+
+### REST API flow
+- [x] `POST /api/auth/register` → 201, user created
+- [x] `POST /api/auth/login` → 200, JWT received
+- [x] `POST /api/rooms` → 201, room created
+- [x] `POST /api/rooms/{roomId}/messages` → 201, message sent
+- [x] `POST /api/attachments` → 201, file uploaded
+- [x] `GET /api/attachments/{id}` → 200, file downloaded
+- [x] `GET /swagger-ui.html` → Swagger UI renders
+
+### GraphQL flow
+- [x] `mutation { register(...) }` → AuthPayload returned
+- [x] `mutation { login(...) }` → token received
+- [x] `query { me { username } }` → current user
+- [x] `mutation { createRoom(...) }` → room created
+- [x] `mutation { sendRoomMessage(...) }` → message sent
+- [x] `query { roomMessages(roomId: ...) }` → message list
+- [x] `subscription { roomMessages(roomId: ...) }` → real-time message received
+- [x] `query { contacts }` → friend list
+- [x] `GET /graphiql` → GraphiQL playground renders
+
+### Docker flow
+- [x] `docker compose up --build` → all services start
+- [x] `docker compose logs flyway` → migrations applied
+- [x] App connects to DB and Kafka without errors
 - [x] `mvn test` — all tests pass
