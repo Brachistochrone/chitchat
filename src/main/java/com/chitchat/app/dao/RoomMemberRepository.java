@@ -5,6 +5,7 @@ import com.chitchat.app.entity.RoomMemberId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface RoomMemberRepository extends JpaRepository<RoomMember, RoomMemberId> {
 
@@ -13,4 +14,10 @@ public interface RoomMemberRepository extends JpaRepository<RoomMember, RoomMemb
     List<RoomMember> findByIdUserId(Long userId);
 
     boolean existsByIdRoomIdAndIdUserId(Long roomId, Long userId);
+
+    Optional<RoomMember> findByIdRoomIdAndIdUserId(Long roomId, Long userId);
+
+    int countByIdRoomId(Long roomId);
+
+    void deleteByIdRoomIdAndIdUserId(Long roomId, Long userId);
 }
